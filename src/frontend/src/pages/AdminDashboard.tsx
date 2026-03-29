@@ -6,37 +6,40 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle,
+  Ban,
   Calendar,
-  CheckCircle,
-  CheckSquare,
+  CheckCircle2,
+  ChevronRight,
   Clock,
   LogOut,
+  MoreVertical,
   RefreshCw,
   Stethoscope,
+  Timer,
   Trash2,
+  UserX,
   Users,
-  XCircle,
-  XSquare,
+  Zap,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { Appointment } from "../backend.d";
 import { useActor } from "../hooks/useActor";
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function formatPhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");
@@ -50,127 +53,187 @@ function waLink(phone: string, message: string): string {
   return `https://wa.me/${formatPhone(phone)}?text=${encodeURIComponent(message)}`;
 }
 
-function isAfter5Min(appt: Appointment): boolean {
-  if (!appt.date || !appt.time) return false;
-  try {
-    const [year, month, day] = appt.date.split("-").map(Number);
-    const [hour, minute] = appt.time.split(":").map(Number);
-    const apptDate = new Date(year, month - 1, day, hour, minute);
-    const cutoff = new Date(apptDate.getTime() + 5 * 60 * 1000);
-    return new Date() >= cutoff;
-  } catch {
-    return false;
-  }
+function todayStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function getDateLabel(dateStr: string): string {
-  if (!dateStr) return "Unknown";
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-  if (dateStr === fmt(today)) return "Today";
-  if (dateStr === fmt(yesterday)) return "Yesterday";
-  return dateStr;
+function apptDateTime(appt: Appointment): Date {
+  const [y, m, d] = appt.date.split("-").map(Number);
+  const [h, min] = appt.time.split(":").map(Number);
+  return new Date(y, m - 1, d, h, min);
 }
 
-function groupByDate(
-  appts: Appointment[],
-): { label: string; appts: Appointment[] }[] {
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
+function formatTime12(time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
 
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-  const todayStr = fmt(today);
-  const yesterdayStr = fmt(yesterday);
-
-  const groups: Record<string, Appointment[]> = {};
-  for (const appt of appts) {
-    const key = appt.date || "Unknown";
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(appt);
-  }
-
-  // Sort dates: today first, yesterday second, then others descending
-  const sortedKeys = Object.keys(groups).sort((a, b) => {
-    if (a === todayStr) return -1;
-    if (b === todayStr) return 1;
-    if (a === yesterdayStr) return -1;
-    if (b === yesterdayStr) return 1;
-    return b.localeCompare(a);
+function formatDateDisplay(dateStr: string): string {
+  const today = todayStr();
+  if (dateStr === today) return "Today";
+  const d = new Date(`${dateStr}T00:00:00`);
+  return d.toLocaleDateString("en-IN", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
   });
-
-  return sortedKeys.map((key) => ({
-    label: getDateLabel(key),
-    appts: groups[key],
-  }));
 }
 
-const dayHeaderColors: Record<
-  string,
-  { bg: string; text: string; border: string; dot: string }
+// ─── Unified Status Logic ────────────────────────────────────────────────────
+
+type DisplayStatus =
+  | "Booked"
+  | "Confirmed"
+  | "In Progress"
+  | "Completed"
+  | "Cancelled"
+  | "No-show"
+  | "Rescheduled";
+
+function getDisplayStatus(appt: Appointment): DisplayStatus {
+  if (appt.status === "Cancelled") return "Cancelled";
+  if (appt.status === "Rescheduled") return "Rescheduled";
+  if (appt.status === "No-show") return "No-show";
+  if (appt.status === "Confirmed") {
+    if (appt.treatmentDone === true) return "Completed";
+    if (appt.treatmentDone === false) return "In Progress";
+    return "Confirmed";
+  }
+  // Pending → Booked
+  return "Booked";
+}
+
+const STATUS_STYLES: Record<
+  DisplayStatus,
+  { bg: string; text: string; dot: string }
 > = {
-  Today: {
-    bg: "bg-blue-50",
-    text: "text-blue-800",
-    border: "border-blue-200",
-    dot: "bg-blue-500",
+  Booked: {
+    bg: "bg-yellow-100",
+    text: "text-yellow-800",
+    dot: "bg-yellow-500",
   },
-  Yesterday: {
-    bg: "bg-purple-50",
+  Confirmed: { bg: "bg-blue-100", text: "text-blue-800", dot: "bg-blue-500" },
+  "In Progress": {
+    bg: "bg-orange-100",
+    text: "text-orange-800",
+    dot: "bg-orange-500",
+  },
+  Completed: {
+    bg: "bg-green-100",
+    text: "text-green-800",
+    dot: "bg-green-500",
+  },
+  Cancelled: { bg: "bg-red-100", text: "text-red-800", dot: "bg-red-500" },
+  "No-show": { bg: "bg-red-100", text: "text-red-800", dot: "bg-red-400" },
+  Rescheduled: {
+    bg: "bg-purple-100",
     text: "text-purple-800",
-    border: "border-purple-200",
     dot: "bg-purple-500",
   },
 };
 
-function getDayHeaderStyle(label: string) {
-  return (
-    dayHeaderColors[label] ?? {
-      bg: "bg-gray-50",
-      text: "text-gray-700",
-      border: "border-gray-200",
-      dot: "bg-gray-400",
-    }
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const variants: Record<string, string> = {
-    Pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
-    Confirmed: "bg-green-100 text-green-800 border-green-200",
-    Cancelled: "bg-red-100 text-red-800 border-red-200",
-    Rescheduled: "bg-blue-100 text-blue-800 border-blue-200",
-  };
+function StatusBadge({ status }: { status: DisplayStatus }) {
+  const s = STATUS_STYLES[status];
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-        variants[status] ?? "bg-gray-100 text-gray-700 border-gray-200"
-      }`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${s.bg} ${s.text}`}
     >
+      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
       {status}
     </span>
   );
 }
 
-function TreatmentBadge({ done }: { done: boolean | null }) {
-  if (done === null || done === undefined) return null;
-  return done ? (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border bg-emerald-100 text-emerald-800 border-emerald-200">
-      <CheckCircle className="w-3 h-3" /> Done
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border bg-orange-100 text-orange-800 border-orange-200">
-      <XCircle className="w-3 h-3" /> Not Done
-    </span>
-  );
+// ─── Time Grouping ────────────────────────────────────────────────────────────
+
+type TimeGroup =
+  | "Ongoing"
+  | "Upcoming"
+  | "Later Today"
+  | "Past Today"
+  | "Future";
+
+function getTimeGroup(appt: Appointment): TimeGroup {
+  const today = todayStr();
+  const now = new Date();
+  const dt = apptDateTime(appt);
+  const diffMin = (dt.getTime() - now.getTime()) / 60000;
+  const displayStatus = getDisplayStatus(appt);
+
+  if (appt.date > today) return "Future";
+  if (appt.date < today) return "Past Today"; // past dates shown in past
+
+  // Same day
+  if (displayStatus === "In Progress" && diffMin >= -30) return "Ongoing";
+  if (
+    (displayStatus === "Booked" || displayStatus === "Confirmed") &&
+    diffMin > 0 &&
+    diffMin <= 180
+  )
+    return "Upcoming";
+  if (diffMin > 180) return "Later Today";
+  return "Past Today";
 }
+
+const GROUP_ORDER: TimeGroup[] = [
+  "Ongoing",
+  "Upcoming",
+  "Later Today",
+  "Future",
+  "Past Today",
+];
+
+const GROUP_STYLES: Record<
+  TimeGroup,
+  {
+    label: string;
+    color: string;
+    bg: string;
+    border: string;
+    icon: React.ReactNode;
+  }
+> = {
+  Ongoing: {
+    label: "Ongoing",
+    color: "text-orange-700",
+    bg: "bg-orange-50",
+    border: "border-orange-200",
+    icon: <Timer className="w-4 h-4" />,
+  },
+  Upcoming: {
+    label: "Upcoming",
+    color: "text-blue-700",
+    bg: "bg-blue-50",
+    border: "border-blue-200",
+    icon: <Clock className="w-4 h-4" />,
+  },
+  "Later Today": {
+    label: "Later Today",
+    color: "text-slate-700",
+    bg: "bg-slate-50",
+    border: "border-slate-200",
+    icon: <Calendar className="w-4 h-4" />,
+  },
+  Future: {
+    label: "Future Dates",
+    color: "text-indigo-700",
+    bg: "bg-indigo-50",
+    border: "border-indigo-200",
+    icon: <ChevronRight className="w-4 h-4" />,
+  },
+  "Past Today": {
+    label: "Past",
+    color: "text-gray-600",
+    bg: "bg-gray-50",
+    border: "border-gray-200",
+    icon: <CheckCircle2 className="w-4 h-4" />,
+  },
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -264,6 +327,11 @@ export default function AdminDashboard() {
     toast.error(`Cancelled appointment for ${appt.name}`);
   }
 
+  async function handleNoShow(appt: Appointment) {
+    await updateStatus.mutateAsync({ id: appt.id, status: "No-show" });
+    toast.warning(`Marked no-show for ${appt.name}`);
+  }
+
   function openReschedule(appt: Appointment) {
     setRescheduleAppt(appt);
     setNewDate(appt.date);
@@ -297,155 +365,214 @@ export default function AdminDashboard() {
     toast.success("Appointment deleted");
   }
 
-  function handleTreatmentDone(appt: Appointment, done: boolean) {
-    const patientName = appt.name || "Patient";
-    const message = done
-      ? `Hello ${patientName}, thank you for visiting Mediverse Dental Clinic. Your treatment has been successfully completed. We hope you are feeling better. For any follow-up, feel free to contact us.`
-      : `Hello ${patientName}, your treatment at Mediverse Dental Clinic was not completed. Please contact us to continue or reschedule your treatment.`;
-    const phone = "+91 9142345153";
-    window.open(waLink(phone, message), "_blank");
-    markTreatment.mutate(
-      { id: appt.id, done },
-      {
-        onSuccess: () =>
-          toast.success(
-            `Treatment marked as ${done ? "Done" : "Not Done"} for ${appt.name}`,
-          ),
-      },
-    );
+  async function handleStart(appt: Appointment) {
+    await markTreatment.mutateAsync({ id: appt.id, done: false });
+    toast.success(`Started treatment for ${appt.name}`);
   }
 
-  const filtered =
-    filter === "All"
-      ? appointments
-      : filter === "Treatment Done"
-        ? appointments.filter((a) => a.treatmentDone === true)
-        : filter === "Treatment Not Done"
-          ? appointments.filter((a) => a.treatmentDone === false)
-          : appointments.filter((a) => a.status === filter);
+  async function handleComplete(appt: Appointment) {
+    const patientName = appt.name || "Patient";
+    window.open(
+      waLink(
+        "+91 9142345153",
+        `Hello ${patientName}, thank you for visiting Mediverse Dental Clinic. Your treatment has been successfully completed. We hope you are feeling better. For any follow-up, feel free to contact us.`,
+      ),
+      "_blank",
+    );
+    await markTreatment.mutateAsync({ id: appt.id, done: true });
+    toast.success(`Completed treatment for ${appt.name}`);
+  }
 
+  // ─── Filter ────────────────────────────────────────────────────────────────
+  const today = todayStr();
+  const now = new Date();
+
+  const filteredAppointments = appointments.filter((appt) => {
+    const ds = getDisplayStatus(appt);
+    if (filter === "All") return true;
+    if (filter === "Today") return appt.date === today;
+    if (filter === "Upcoming") {
+      const dt = apptDateTime(appt);
+      const diff = (dt.getTime() - now.getTime()) / 60000;
+      return appt.date === today && diff > 0 && diff <= 180;
+    }
+    if (filter === "Completed") return ds === "Completed";
+    if (filter === "Cancelled") return ds === "Cancelled" || ds === "No-show";
+    return true;
+  });
+
+  // ─── Stats ──────────────────────────────────────────────────────────────────
   const counts = {
     total: appointments.length,
-    pending: appointments.filter((a) => a.status === "Pending").length,
-    confirmed: appointments.filter((a) => a.status === "Confirmed").length,
-    cancelled: appointments.filter((a) => a.status === "Cancelled").length,
-    treatmentDone: appointments.filter((a) => a.treatmentDone === true).length,
-    treatmentNotDone: appointments.filter((a) => a.treatmentDone === false)
+    confirmed: appointments.filter((a) => getDisplayStatus(a) === "Confirmed")
       .length,
+    inProgress: appointments.filter(
+      (a) => getDisplayStatus(a) === "In Progress",
+    ).length,
+    completed: appointments.filter((a) => getDisplayStatus(a) === "Completed")
+      .length,
+    cancelled: appointments.filter((a) =>
+      ["Cancelled", "No-show"].includes(getDisplayStatus(a)),
+    ).length,
   };
 
-  const groupedAppointments = groupByDate(filtered);
+  // ─── Next Appointment ───────────────────────────────────────────────────────
+  const nextAppt =
+    appointments
+      .filter((a) => {
+        const ds = getDisplayStatus(a);
+        const dt = apptDateTime(a);
+        return (ds === "Confirmed" || ds === "Booked") && dt > now;
+      })
+      .sort(
+        (a, b) => apptDateTime(a).getTime() - apptDateTime(b).getTime(),
+      )[0] ?? null;
 
-  function renderAppointmentRow(appt: Appointment, idx: number) {
-    const after5 = isAfter5Min(appt);
-    return (
-      <TableRow key={appt.id.toString()} data-ocid={`admin.item.${idx + 1}`}>
-        <TableCell className="text-muted-foreground text-sm">
-          {idx + 1}
-        </TableCell>
-        <TableCell>
-          <div>
-            <p className="font-medium text-sm">{appt.name}</p>
-            <p className="text-xs text-muted-foreground">{appt.email}</p>
-          </div>
-        </TableCell>
-        <TableCell className="text-sm">{appt.phone}</TableCell>
-        <TableCell className="text-sm">{appt.date}</TableCell>
-        <TableCell className="text-sm">{appt.time}</TableCell>
-        <TableCell className="text-sm">{appt.treatment}</TableCell>
-        <TableCell>
-          <StatusBadge status={appt.status} />
-        </TableCell>
-        <TableCell>
-          {after5 ? (
-            <TreatmentBadge done={appt.treatmentDone ?? null} />
-          ) : (
-            <span className="text-xs text-muted-foreground italic">
-              Pending appointment
-            </span>
-          )}
-        </TableCell>
-        <TableCell>
-          <div className="flex items-center justify-end gap-1 flex-wrap">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 px-2 text-xs text-green-700 border-green-200 hover:bg-green-50"
-              onClick={() => handleConfirm(appt)}
-              disabled={appt.status === "Confirmed" || updateStatus.isPending}
-              data-ocid="admin.confirm_button"
-            >
-              <CheckCircle className="w-3.5 h-3.5 mr-1" />
-              Confirm
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 px-2 text-xs text-red-700 border-red-200 hover:bg-red-50"
-              onClick={() => handleCancel(appt)}
-              disabled={appt.status === "Cancelled" || updateStatus.isPending}
-              data-ocid="admin.cancel_button"
-            >
-              <XCircle className="w-3.5 h-3.5 mr-1" />
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 px-2 text-xs text-blue-700 border-blue-200 hover:bg-blue-50"
-              onClick={() => openReschedule(appt)}
-              data-ocid="admin.edit_button"
-            >
-              <Calendar className="w-3.5 h-3.5 mr-1" />
-              Reschedule
-            </Button>
-            {after5 && (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 px-2 text-xs text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-                  onClick={() => handleTreatmentDone(appt, true)}
-                  disabled={
-                    appt.treatmentDone === true || markTreatment.isPending
-                  }
-                  data-ocid="admin.treatment_done_button"
-                >
-                  <CheckSquare className="w-3.5 h-3.5 mr-1" />
-                  Done
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 px-2 text-xs text-orange-700 border-orange-200 hover:bg-orange-50"
-                  onClick={() => handleTreatmentDone(appt, false)}
-                  disabled={
-                    appt.treatmentDone === false || markTreatment.isPending
-                  }
-                  data-ocid="admin.treatment_not_done_button"
-                >
-                  <XSquare className="w-3.5 h-3.5 mr-1" />
-                  Not Done
-                </Button>
-              </>
-            )}
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 px-2 text-xs text-destructive border-destructive/20 hover:bg-destructive/5"
-              onClick={() => setDeleteConfirmId(appt.id)}
-              data-ocid="admin.delete_button"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </Button>
-          </div>
-        </TableCell>
-      </TableRow>
+  // ─── Grouped Cards ──────────────────────────────────────────────────────────
+  const groupMap: Record<TimeGroup, Appointment[]> = {
+    Ongoing: [],
+    Upcoming: [],
+    "Later Today": [],
+    Future: [],
+    "Past Today": [],
+  };
+
+  for (const appt of filteredAppointments) {
+    groupMap[getTimeGroup(appt)].push(appt);
+  }
+
+  // Sort each group by time ascending
+  for (const key of GROUP_ORDER) {
+    groupMap[key].sort(
+      (a, b) => apptDateTime(a).getTime() - apptDateTime(b).getTime(),
     );
   }
 
+  const activeGroups = GROUP_ORDER.filter((g) => groupMap[g].length > 0);
+
+  // ─── Card Render ────────────────────────────────────────────────────────────
+  function AppointmentCard({
+    appt,
+    index,
+  }: { appt: Appointment; index: number }) {
+    const displayStatus = getDisplayStatus(appt);
+    const showDate = appt.date !== today;
+
+    return (
+      <div
+        className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col gap-3 hover:shadow-md transition-shadow duration-200"
+        data-ocid={`admin.item.${index + 1}`}
+      >
+        {/* Top row: time + status badge */}
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-3xl font-bold text-slate-900 leading-none tracking-tight">
+              {formatTime12(appt.time)}
+            </p>
+            {showDate && (
+              <p className="text-xs text-slate-400 mt-1">
+                {formatDateDisplay(appt.date)}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <StatusBadge status={displayStatus} />
+            {/* Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  data-ocid="admin.dropdown_menu"
+                >
+                  <MoreVertical className="w-4 h-4 text-slate-500" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {displayStatus === "Booked" && (
+                  <DropdownMenuItem
+                    onClick={() => handleConfirm(appt)}
+                    data-ocid="admin.confirm_button"
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-2 text-blue-500" />
+                    Confirm
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  onClick={() => openReschedule(appt)}
+                  data-ocid="admin.edit_button"
+                >
+                  <Calendar className="w-4 h-4 mr-2 text-slate-500" />
+                  Reschedule
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleCancel(appt)}
+                  data-ocid="admin.cancel_button"
+                >
+                  <Ban className="w-4 h-4 mr-2 text-red-500" />
+                  Cancel
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleNoShow(appt)}
+                  data-ocid="admin.secondary_button"
+                >
+                  <UserX className="w-4 h-4 mr-2 text-red-400" />
+                  Mark No-show
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setDeleteConfirmId(appt.id)}
+                  data-ocid="admin.delete_button"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* Patient info */}
+        <div>
+          <p className="text-lg font-semibold text-slate-800 leading-tight">
+            {appt.name}
+          </p>
+          <p className="text-sm text-slate-500 mt-0.5">{appt.treatment}</p>
+        </div>
+
+        {/* Primary action */}
+        {displayStatus === "Confirmed" && (
+          <Button
+            size="sm"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
+            onClick={() => handleStart(appt)}
+            disabled={markTreatment.isPending}
+            data-ocid="admin.primary_button"
+          >
+            <Zap className="w-4 h-4 mr-1.5" />
+            Start Treatment
+          </Button>
+        )}
+        {displayStatus === "In Progress" && (
+          <Button
+            size="sm"
+            className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl"
+            onClick={() => handleComplete(appt)}
+            disabled={markTreatment.isPending}
+            data-ocid="admin.primary_button"
+          >
+            <CheckCircle2 className="w-4 h-4 mr-1.5" />
+            Mark Complete
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-muted">
+    <div className="min-h-screen" style={{ backgroundColor: "#F1F5F9" }}>
       {/* Header */}
       <header className="bg-white border-b shadow-xs sticky top-0 z-10">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
@@ -473,187 +600,222 @@ export default function AdminDashboard() {
       </header>
 
       <main className="container mx-auto px-4 py-6 space-y-6">
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {/* Stats Bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {[
             {
               label: "Total",
               value: counts.total,
               icon: Users,
-              color: "text-clinic-blue",
-              bg: "bg-blue-50",
-            },
-            {
-              label: "Pending",
-              value: counts.pending,
-              icon: Clock,
-              color: "text-yellow-600",
-              bg: "bg-yellow-50",
+              bg: "bg-slate-100",
+              text: "text-slate-700",
             },
             {
               label: "Confirmed",
               value: counts.confirmed,
-              icon: CheckCircle,
-              color: "text-green-600",
-              bg: "bg-green-50",
+              icon: CheckCircle2,
+              bg: "bg-blue-100",
+              text: "text-blue-700",
+            },
+            {
+              label: "In Progress",
+              value: counts.inProgress,
+              icon: Timer,
+              bg: "bg-orange-100",
+              text: "text-orange-700",
+            },
+            {
+              label: "Completed",
+              value: counts.completed,
+              icon: CheckCircle2,
+              bg: "bg-green-100",
+              text: "text-green-700",
             },
             {
               label: "Cancelled",
               value: counts.cancelled,
-              icon: XCircle,
-              color: "text-red-600",
-              bg: "bg-red-50",
-            },
-            {
-              label: "Treated",
-              value: counts.treatmentDone,
-              icon: CheckSquare,
-              color: "text-emerald-600",
-              bg: "bg-emerald-50",
-            },
-            {
-              label: "Not Treated",
-              value: counts.treatmentNotDone,
-              icon: XSquare,
-              color: "text-orange-600",
-              bg: "bg-orange-50",
+              icon: Ban,
+              bg: "bg-red-100",
+              text: "text-red-700",
             },
           ].map((stat) => (
             <div
               key={stat.label}
-              className="bg-white rounded-xl p-4 shadow-xs border"
+              className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center gap-3"
             >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-10 h-10 rounded-lg ${stat.bg} flex items-center justify-center`}
-                >
-                  <stat.icon className={`w-5 h-5 ${stat.color}`} />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-clinic-navy">
-                    {stat.value}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{stat.label}</p>
-                </div>
+              <div
+                className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center flex-shrink-0`}
+              >
+                <stat.icon className={`w-5 h-5 ${stat.text}`} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-2xl font-bold text-slate-900 leading-none">
+                  {stat.value}
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5 truncate">
+                  {stat.label}
+                </p>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Appointments Table */}
-        <div className="bg-white rounded-xl border shadow-xs overflow-hidden">
-          <div className="p-4 border-b flex items-center justify-between flex-wrap gap-3">
-            <h2 className="font-semibold text-clinic-navy">Appointments</h2>
-            <Tabs value={filter} onValueChange={setFilter}>
-              <TabsList className="h-8 flex-wrap">
-                {[
-                  "All",
-                  "Pending",
-                  "Confirmed",
-                  "Cancelled",
-                  "Rescheduled",
-                  "Treatment Done",
-                  "Treatment Not Done",
-                ].map((f) => (
+        {/* Filter Tabs */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3">
+          <Tabs value={filter} onValueChange={setFilter}>
+            <TabsList className="h-9 bg-slate-100 rounded-xl p-1">
+              {["All", "Today", "Upcoming", "Completed", "Cancelled"].map(
+                (f) => (
                   <TabsTrigger
                     key={f}
                     value={f}
-                    className="text-xs h-7 px-3"
+                    className="text-xs px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
                     data-ocid="admin.tab"
                   >
                     {f}
                   </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
+                ),
+              )}
+            </TabsList>
+          </Tabs>
+        </div>
+
+        {/* Loading / Error */}
+        {isLoading && (
+          <div
+            className="flex items-center justify-center py-20"
+            data-ocid="admin.loading_state"
+          >
+            <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
+            <span className="ml-3 text-slate-500">Loading appointments...</span>
           </div>
+        )}
 
-          {isLoading && (
-            <div
-              className="flex items-center justify-center py-16"
-              data-ocid="admin.loading_state"
-            >
-              <RefreshCw className="w-6 h-6 animate-spin text-clinic-blue" />
-              <span className="ml-2 text-muted-foreground">
-                Loading appointments...
-              </span>
-            </div>
-          )}
+        {isError && (
+          <div
+            className="flex items-center justify-center py-20"
+            data-ocid="admin.error_state"
+          >
+            <AlertCircle className="w-6 h-6 text-red-500" />
+            <span className="ml-3 text-red-600">
+              Failed to load appointments
+            </span>
+          </div>
+        )}
 
-          {isError && (
-            <div
-              className="flex items-center justify-center py-16"
-              data-ocid="admin.error_state"
-            >
-              <AlertCircle className="w-6 h-6 text-destructive" />
-              <span className="ml-2 text-destructive">
-                Failed to load appointments
-              </span>
-            </div>
-          )}
+        {!isLoading && !isError && (
+          <>
+            {/* Next Appointment Banner */}
+            {nextAppt ? (
+              <div
+                className="rounded-2xl p-5 text-white relative overflow-hidden"
+                style={{
+                  background:
+                    "linear-gradient(135deg, #1e40af 0%, #2563eb 60%, #3b82f6 100%)",
+                }}
+                data-ocid="admin.card"
+              >
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                      <Clock className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-blue-200 text-xs font-semibold uppercase tracking-widest mb-0.5">
+                        Next Appointment
+                      </p>
+                      <p className="text-4xl font-bold leading-none">
+                        {formatTime12(nextAppt.time)}
+                      </p>
+                      <p className="text-lg font-semibold mt-1 text-white/90">
+                        {nextAppt.name}
+                      </p>
+                      <p className="text-sm text-blue-200 mt-0.5">
+                        {nextAppt.treatment}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    className="bg-white text-blue-700 hover:bg-blue-50 font-semibold rounded-xl shadow-md px-6"
+                    onClick={() => handleStart(nextAppt)}
+                    disabled={markTreatment.isPending}
+                    data-ocid="admin.primary_button"
+                  >
+                    <Zap className="w-4 h-4 mr-2" />
+                    Start Now
+                  </Button>
+                </div>
+                {/* Decorative */}
+                <div className="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-white/5" />
+                <div className="absolute -bottom-8 right-16 w-24 h-24 rounded-full bg-white/5" />
+              </div>
+            ) : (
+              <div
+                className="rounded-2xl p-5 bg-white border border-slate-100 shadow-sm flex items-center gap-3 text-slate-400"
+                data-ocid="admin.card"
+              >
+                <Clock className="w-5 h-5" />
+                <span className="text-sm">
+                  No upcoming appointments scheduled
+                </span>
+              </div>
+            )}
 
-          {!isLoading && !isError && filtered.length === 0 && (
-            <div
-              className="text-center py-16 text-muted-foreground"
-              data-ocid="admin.empty_state"
-            >
-              <Calendar className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p className="font-medium">No appointments found</p>
-              <p className="text-sm">
-                {filter === "All"
-                  ? "No bookings yet"
-                  : `No ${filter.toLowerCase()} appointments`}
-              </p>
-            </div>
-          )}
+            {/* Empty state */}
+            {filteredAppointments.length === 0 && (
+              <div
+                className="text-center py-20 text-slate-400"
+                data-ocid="admin.empty_state"
+              >
+                <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p className="font-semibold text-slate-600">
+                  No appointments found
+                </p>
+                <p className="text-sm mt-1">
+                  {filter === "All"
+                    ? "No bookings yet"
+                    : `No ${filter.toLowerCase()} appointments`}
+                </p>
+              </div>
+            )}
 
-          {!isLoading && !isError && filtered.length > 0 && (
-            <div className="overflow-x-auto">
-              {groupedAppointments.map((group) => {
-                const style = getDayHeaderStyle(group.label);
-                return (
-                  <div key={group.label}>
-                    {/* Day separator header */}
-                    <div
-                      className={`flex items-center gap-2 px-4 py-2 ${style.bg} border-b ${style.border}`}
-                    >
-                      <div className={`w-2 h-2 rounded-full ${style.dot}`} />
-                      <span
-                        className={`text-xs font-semibold uppercase tracking-wider ${style.text}`}
-                      >
-                        {group.label}
-                      </span>
-                      <span className={`text-xs ${style.text} opacity-70 ml-1`}>
-                        ({group.appts.length} appointment
-                        {group.appts.length !== 1 ? "s" : ""})
+            {/* Time-grouped card sections */}
+            {activeGroups.map((groupKey) => {
+              const appts = groupMap[groupKey];
+              const style = GROUP_STYLES[groupKey];
+              return (
+                <section key={groupKey}>
+                  {/* Group header */}
+                  <div className="flex items-center gap-2 mb-3 px-1">
+                    <div className={`flex items-center gap-2 ${style.color}`}>
+                      {style.icon}
+                      <span className="text-sm font-bold uppercase tracking-wider">
+                        {style.label}
                       </span>
                     </div>
-                    <Table data-ocid="admin.table">
-                      <TableHeader>
-                        <TableRow className="bg-muted/30">
-                          <TableHead className="w-10">#</TableHead>
-                          <TableHead>Patient</TableHead>
-                          <TableHead>Phone</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Time</TableHead>
-                          <TableHead>Treatment</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Treatment Status</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {group.appts.map((appt, idx) =>
-                          renderAppointmentRow(appt, idx),
-                        )}
-                      </TableBody>
-                    </Table>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full font-semibold ${style.bg} ${style.color} border ${style.border}`}
+                    >
+                      {appts.length}
+                    </span>
+                    <div className={`flex-1 h-px ${style.border} border-t`} />
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+
+                  {/* Cards grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {appts.map((appt, idx) => (
+                      <AppointmentCard
+                        key={appt.id.toString()}
+                        appt={appt}
+                        index={idx}
+                      />
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </>
+        )}
       </main>
 
       {/* Reschedule Modal */}
