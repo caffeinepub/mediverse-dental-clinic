@@ -50,7 +50,6 @@ function waLink(phone: string, message: string): string {
   return `https://wa.me/${formatPhone(phone)}?text=${encodeURIComponent(message)}`;
 }
 
-/** Returns true if the appointment time + 5 minutes has passed */
 function isAfter5Min(appt: Appointment): boolean {
   if (!appt.date || !appt.time) return false;
   try {
@@ -62,6 +61,84 @@ function isAfter5Min(appt: Appointment): boolean {
   } catch {
     return false;
   }
+}
+
+function getDateLabel(dateStr: string): string {
+  if (!dateStr) return "Unknown";
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  if (dateStr === fmt(today)) return "Today";
+  if (dateStr === fmt(yesterday)) return "Yesterday";
+  return dateStr;
+}
+
+function groupByDate(
+  appts: Appointment[],
+): { label: string; appts: Appointment[] }[] {
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  const todayStr = fmt(today);
+  const yesterdayStr = fmt(yesterday);
+
+  const groups: Record<string, Appointment[]> = {};
+  for (const appt of appts) {
+    const key = appt.date || "Unknown";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(appt);
+  }
+
+  // Sort dates: today first, yesterday second, then others descending
+  const sortedKeys = Object.keys(groups).sort((a, b) => {
+    if (a === todayStr) return -1;
+    if (b === todayStr) return 1;
+    if (a === yesterdayStr) return -1;
+    if (b === yesterdayStr) return 1;
+    return b.localeCompare(a);
+  });
+
+  return sortedKeys.map((key) => ({
+    label: getDateLabel(key),
+    appts: groups[key],
+  }));
+}
+
+const dayHeaderColors: Record<
+  string,
+  { bg: string; text: string; border: string; dot: string }
+> = {
+  Today: {
+    bg: "bg-blue-50",
+    text: "text-blue-800",
+    border: "border-blue-200",
+    dot: "bg-blue-500",
+  },
+  Yesterday: {
+    bg: "bg-purple-50",
+    text: "text-purple-800",
+    border: "border-purple-200",
+    dot: "bg-purple-500",
+  },
+};
+
+function getDayHeaderStyle(label: string) {
+  return (
+    dayHeaderColors[label] ?? {
+      bg: "bg-gray-50",
+      text: "text-gray-700",
+      border: "border-gray-200",
+      dot: "bg-gray-400",
+    }
+  );
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -119,7 +196,7 @@ export default function AdminDashboard() {
       return actor.getAppointments();
     },
     enabled: !!actor && !isFetching,
-    refetchInterval: 30000, // refresh every 30s so treatment buttons appear automatically
+    refetchInterval: 30000,
   });
 
   const updateStatus = useMutation({
@@ -141,11 +218,8 @@ export default function AdminDashboard() {
       id,
       date,
       time,
-    }: {
-      id: bigint;
-      date: string;
-      time: string;
-    }) => actor!.rescheduleAppointment(id, date, time),
+    }: { id: bigint; date: string; time: string }) =>
+      actor!.rescheduleAppointment(id, date, time),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
       setRescheduleOpen(false);
@@ -167,8 +241,6 @@ export default function AdminDashboard() {
   }
 
   async function handleConfirm(appt: Appointment) {
-    await updateStatus.mutateAsync({ id: appt.id, status: "Confirmed" });
-    toast.success(`Confirmed appointment for ${appt.name}`);
     window.open(
       waLink(
         appt.phone,
@@ -176,11 +248,11 @@ export default function AdminDashboard() {
       ),
       "_blank",
     );
+    await updateStatus.mutateAsync({ id: appt.id, status: "Confirmed" });
+    toast.success(`Confirmed appointment for ${appt.name}`);
   }
 
   async function handleCancel(appt: Appointment) {
-    await updateStatus.mutateAsync({ id: appt.id, status: "Cancelled" });
-    toast.error(`Cancelled appointment for ${appt.name}`);
     window.open(
       waLink(
         appt.phone,
@@ -188,6 +260,8 @@ export default function AdminDashboard() {
       ),
       "_blank",
     );
+    await updateStatus.mutateAsync({ id: appt.id, status: "Cancelled" });
+    toast.error(`Cancelled appointment for ${appt.name}`);
   }
 
   function openReschedule(appt: Appointment) {
@@ -199,6 +273,13 @@ export default function AdminDashboard() {
 
   async function handleReschedule() {
     if (!rescheduleAppt || !newDate || !newTime) return;
+    window.open(
+      waLink(
+        rescheduleAppt.phone,
+        `Your appointment at Mediverse Dental Clinic has been rescheduled to ${newDate} at ${newTime}. See you then! 😊`,
+      ),
+      "_blank",
+    );
     await reschedule.mutateAsync({
       id: rescheduleAppt.id,
       date: newDate,
@@ -209,13 +290,6 @@ export default function AdminDashboard() {
       status: "Rescheduled",
     });
     toast.success(`Rescheduled appointment for ${rescheduleAppt.name}`);
-    window.open(
-      waLink(
-        rescheduleAppt.phone,
-        `Your appointment at Mediverse Dental Clinic has been rescheduled to ${newDate} at ${newTime}. See you then! 😊`,
-      ),
-      "_blank",
-    );
   }
 
   async function handleDelete(id: bigint) {
@@ -223,10 +297,21 @@ export default function AdminDashboard() {
     toast.success("Appointment deleted");
   }
 
-  async function handleTreatmentDone(appt: Appointment, done: boolean) {
-    await markTreatment.mutateAsync({ id: appt.id, done });
-    toast.success(
-      `Treatment marked as ${done ? "Done" : "Not Done"} for ${appt.name}`,
+  function handleTreatmentDone(appt: Appointment, done: boolean) {
+    const patientName = appt.name || "Patient";
+    const message = done
+      ? `Hello ${patientName}, thank you for visiting Mediverse Dental Clinic. Your treatment has been successfully completed. We hope you are feeling better. For any follow-up, feel free to contact us.`
+      : `Hello ${patientName}, your treatment at Mediverse Dental Clinic was not completed. Please contact us to continue or reschedule your treatment.`;
+    const phone = "+91 9142345153";
+    window.open(waLink(phone, message), "_blank");
+    markTreatment.mutate(
+      { id: appt.id, done },
+      {
+        onSuccess: () =>
+          toast.success(
+            `Treatment marked as ${done ? "Done" : "Not Done"} for ${appt.name}`,
+          ),
+      },
     );
   }
 
@@ -248,6 +333,116 @@ export default function AdminDashboard() {
     treatmentNotDone: appointments.filter((a) => a.treatmentDone === false)
       .length,
   };
+
+  const groupedAppointments = groupByDate(filtered);
+
+  function renderAppointmentRow(appt: Appointment, idx: number) {
+    const after5 = isAfter5Min(appt);
+    return (
+      <TableRow key={appt.id.toString()} data-ocid={`admin.item.${idx + 1}`}>
+        <TableCell className="text-muted-foreground text-sm">
+          {idx + 1}
+        </TableCell>
+        <TableCell>
+          <div>
+            <p className="font-medium text-sm">{appt.name}</p>
+            <p className="text-xs text-muted-foreground">{appt.email}</p>
+          </div>
+        </TableCell>
+        <TableCell className="text-sm">{appt.phone}</TableCell>
+        <TableCell className="text-sm">{appt.date}</TableCell>
+        <TableCell className="text-sm">{appt.time}</TableCell>
+        <TableCell className="text-sm">{appt.treatment}</TableCell>
+        <TableCell>
+          <StatusBadge status={appt.status} />
+        </TableCell>
+        <TableCell>
+          {after5 ? (
+            <TreatmentBadge done={appt.treatmentDone ?? null} />
+          ) : (
+            <span className="text-xs text-muted-foreground italic">
+              Pending appointment
+            </span>
+          )}
+        </TableCell>
+        <TableCell>
+          <div className="flex items-center justify-end gap-1 flex-wrap">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs text-green-700 border-green-200 hover:bg-green-50"
+              onClick={() => handleConfirm(appt)}
+              disabled={appt.status === "Confirmed" || updateStatus.isPending}
+              data-ocid="admin.confirm_button"
+            >
+              <CheckCircle className="w-3.5 h-3.5 mr-1" />
+              Confirm
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs text-red-700 border-red-200 hover:bg-red-50"
+              onClick={() => handleCancel(appt)}
+              disabled={appt.status === "Cancelled" || updateStatus.isPending}
+              data-ocid="admin.cancel_button"
+            >
+              <XCircle className="w-3.5 h-3.5 mr-1" />
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs text-blue-700 border-blue-200 hover:bg-blue-50"
+              onClick={() => openReschedule(appt)}
+              data-ocid="admin.edit_button"
+            >
+              <Calendar className="w-3.5 h-3.5 mr-1" />
+              Reschedule
+            </Button>
+            {after5 && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                  onClick={() => handleTreatmentDone(appt, true)}
+                  disabled={
+                    appt.treatmentDone === true || markTreatment.isPending
+                  }
+                  data-ocid="admin.treatment_done_button"
+                >
+                  <CheckSquare className="w-3.5 h-3.5 mr-1" />
+                  Done
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs text-orange-700 border-orange-200 hover:bg-orange-50"
+                  onClick={() => handleTreatmentDone(appt, false)}
+                  disabled={
+                    appt.treatmentDone === false || markTreatment.isPending
+                  }
+                  data-ocid="admin.treatment_not_done_button"
+                >
+                  <XSquare className="w-3.5 h-3.5 mr-1" />
+                  Not Done
+                </Button>
+              </>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs text-destructive border-destructive/20 hover:bg-destructive/5"
+              onClick={() => setDeleteConfirmId(appt.id)}
+              data-ocid="admin.delete_button"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-muted">
@@ -414,155 +609,48 @@ export default function AdminDashboard() {
 
           {!isLoading && !isError && filtered.length > 0 && (
             <div className="overflow-x-auto">
-              <Table data-ocid="admin.table">
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="w-10">#</TableHead>
-                    <TableHead>Patient</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Time</TableHead>
-                    <TableHead>Treatment</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Treatment Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((appt, idx) => {
-                    const after5 = isAfter5Min(appt);
-                    return (
-                      <TableRow
-                        key={appt.id.toString()}
-                        data-ocid={`admin.item.${idx + 1}`}
+              {groupedAppointments.map((group) => {
+                const style = getDayHeaderStyle(group.label);
+                return (
+                  <div key={group.label}>
+                    {/* Day separator header */}
+                    <div
+                      className={`flex items-center gap-2 px-4 py-2 ${style.bg} border-b ${style.border}`}
+                    >
+                      <div className={`w-2 h-2 rounded-full ${style.dot}`} />
+                      <span
+                        className={`text-xs font-semibold uppercase tracking-wider ${style.text}`}
                       >
-                        <TableCell className="text-muted-foreground text-sm">
-                          {idx + 1}
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium text-sm">{appt.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {appt.email}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm">{appt.phone}</TableCell>
-                        <TableCell className="text-sm">{appt.date}</TableCell>
-                        <TableCell className="text-sm">{appt.time}</TableCell>
-                        <TableCell className="text-sm">
-                          {appt.treatment}
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={appt.status} />
-                        </TableCell>
-                        <TableCell>
-                          {after5 ? (
-                            <TreatmentBadge done={appt.treatmentDone ?? null} />
-                          ) : (
-                            <span className="text-xs text-muted-foreground italic">
-                              Pending appointment
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center justify-end gap-1 flex-wrap">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 px-2 text-xs text-green-700 border-green-200 hover:bg-green-50"
-                              onClick={() => handleConfirm(appt)}
-                              disabled={
-                                appt.status === "Confirmed" ||
-                                updateStatus.isPending
-                              }
-                              data-ocid="admin.confirm_button"
-                              title="Confirm"
-                            >
-                              <CheckCircle className="w-3.5 h-3.5 mr-1" />
-                              Confirm
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 px-2 text-xs text-red-700 border-red-200 hover:bg-red-50"
-                              onClick={() => handleCancel(appt)}
-                              disabled={
-                                appt.status === "Cancelled" ||
-                                updateStatus.isPending
-                              }
-                              data-ocid="admin.cancel_button"
-                              title="Cancel"
-                            >
-                              <XCircle className="w-3.5 h-3.5 mr-1" />
-                              Cancel
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 px-2 text-xs text-blue-700 border-blue-200 hover:bg-blue-50"
-                              onClick={() => openReschedule(appt)}
-                              data-ocid="admin.edit_button"
-                              title="Reschedule"
-                            >
-                              <Calendar className="w-3.5 h-3.5 mr-1" />
-                              Reschedule
-                            </Button>
-                            {after5 && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 px-2 text-xs text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-                                  onClick={() =>
-                                    handleTreatmentDone(appt, true)
-                                  }
-                                  disabled={
-                                    appt.treatmentDone === true ||
-                                    markTreatment.isPending
-                                  }
-                                  data-ocid="admin.treatment_done_button"
-                                  title="Mark Treatment Done"
-                                >
-                                  <CheckSquare className="w-3.5 h-3.5 mr-1" />
-                                  Done
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 px-2 text-xs text-orange-700 border-orange-200 hover:bg-orange-50"
-                                  onClick={() =>
-                                    handleTreatmentDone(appt, false)
-                                  }
-                                  disabled={
-                                    appt.treatmentDone === false ||
-                                    markTreatment.isPending
-                                  }
-                                  data-ocid="admin.treatment_not_done_button"
-                                  title="Mark Treatment Not Done"
-                                >
-                                  <XSquare className="w-3.5 h-3.5 mr-1" />
-                                  Not Done
-                                </Button>
-                              </>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 px-2 text-xs text-destructive border-destructive/20 hover:bg-destructive/5"
-                              onClick={() => setDeleteConfirmId(appt.id)}
-                              data-ocid="admin.delete_button"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                        {group.label}
+                      </span>
+                      <span className={`text-xs ${style.text} opacity-70 ml-1`}>
+                        ({group.appts.length} appointment
+                        {group.appts.length !== 1 ? "s" : ""})
+                      </span>
+                    </div>
+                    <Table data-ocid="admin.table">
+                      <TableHeader>
+                        <TableRow className="bg-muted/30">
+                          <TableHead className="w-10">#</TableHead>
+                          <TableHead>Patient</TableHead>
+                          <TableHead>Phone</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Time</TableHead>
+                          <TableHead>Treatment</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Treatment Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {group.appts.map((appt, idx) =>
+                          renderAppointmentRow(appt, idx),
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

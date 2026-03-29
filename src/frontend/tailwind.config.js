@@ -16,8 +16,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
-        display: ['Figtree', 'system-ui', 'sans-serif'],
+        sans: ['Poppins', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        display: ['Poppins', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "oklch(var(--border))",
@@ -80,6 +80,7 @@ export default {
         xs: "0 1px 2px 0 rgba(0,0,0,0.05)",
         card: "0 4px 24px -4px rgba(14,165,233,0.12)",
         "card-hover": "0 12px 40px -8px rgba(14,165,233,0.22)",
+        glass: "0 8px 32px rgba(14,165,233,0.08)",
       },
       keyframes: {
         "accordion-down": {

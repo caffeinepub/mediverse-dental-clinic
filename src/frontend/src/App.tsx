@@ -6,7 +6,9 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  useRouterState,
 } from "@tanstack/react-router";
+import ChatBot from "./components/ChatBot";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminLogin from "./pages/AdminLogin";
 import Home from "./pages/Home";
@@ -17,13 +19,20 @@ function RequireAdmin() {
   return <Outlet />;
 }
 
-const rootRoute = createRootRoute({
-  component: () => (
+function RootLayout() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isAdminRoute = pathname.startsWith("/admin");
+  return (
     <>
       <Outlet />
       <Toaster richColors position="top-right" />
+      {!isAdminRoute && <ChatBot />}
     </>
-  ),
+  );
+}
+
+const rootRoute = createRootRoute({
+  component: RootLayout,
 });
 
 const indexRoute = createRoute({

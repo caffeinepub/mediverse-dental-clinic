@@ -10,11 +10,13 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Award,
   CheckCircle,
+  ChevronLeft,
   ChevronRight,
+  Clock,
   Heart,
   Loader2,
-  Mail,
   MapPin,
   Menu,
   MessageCircle,
@@ -23,53 +25,65 @@ import {
   Sparkles,
   Star,
   Stethoscope,
+  Users,
   X,
+  Zap,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useActor } from "../hooks/useActor";
 
 const CLINIC_NAME = "Mediverse Dental Clinic";
 const CLINIC_PHONE = "+91 9142345153";
 const CLINIC_WA = "919142345153";
-const CLINIC_EMAIL = "info4clinic@gmail.com";
 const CLINIC_ADDRESS =
   "V-466, Central School Rd, Jogipur, Kankarbagh, Bankman Colony, Patna, Bihar 800020";
 
 const TREATMENTS = [
-  "Dental Cleaning",
+  "Teeth Cleaning",
   "Root Canal",
-  "Braces",
+  "Dental Braces",
   "Dental Implants",
   "Teeth Whitening",
-  "Other",
+  "Consultation",
 ];
 
 const SERVICES = [
   {
     icon: "🦷",
-    name: "Dental Cleaning",
-    desc: "Professional scaling and polishing to remove plaque and tartar, keeping your gums healthy and your smile bright.",
+    name: "Teeth Cleaning",
+    desc: "Professional scaling & polishing to remove plaque and tartar. Keep gums healthy and smile bright.",
+    color: "#0EA5E9",
   },
   {
     icon: "🔬",
-    name: "Root Canal",
-    desc: "Painless root canal treatment to save infected teeth and relieve pain with our advanced techniques.",
+    name: "Root Canal Treatment",
+    desc: "Painless root canal to save infected teeth and relieve pain using advanced, gentle techniques.",
+    color: "#6366F1",
   },
   {
     icon: "😁",
-    name: "Braces & Aligners",
-    desc: "Metal braces and clear aligners for perfectly aligned teeth and a confident, beautiful smile.",
+    name: "Dental Braces",
+    desc: "Metal & ceramic braces and clear aligners for perfectly aligned teeth and a confident smile.",
+    color: "#22C55E",
   },
   {
     icon: "🦴",
     name: "Dental Implants",
-    desc: "Premium titanium implants that look, feel, and function just like natural teeth for a permanent solution.",
+    desc: "Premium titanium implants that look, feel, and function just like your natural teeth permanently.",
+    color: "#0EA5E9",
   },
   {
     icon: "✨",
     name: "Teeth Whitening",
-    desc: "Advanced whitening treatments to remove stains and brighten your smile by up to 8 shades.",
+    desc: "Advanced whitening treatments to remove stains and brighten your smile up to 8 shades.",
+    color: "#6366F1",
+  },
+  {
+    icon: "💎",
+    name: "Cosmetic Dentistry",
+    desc: "Veneers, bonding, and smile makeovers for the perfect aesthetic smile you've always dreamed of.",
+    color: "#22C55E",
   },
 ];
 
@@ -79,47 +93,63 @@ const TESTIMONIALS = [
     role: "Software Engineer",
     text: "Absolutely amazing experience! Dr. Verma was so gentle and professional. My root canal was completely painless. Highly recommend Mediverse to anyone!",
     rating: 5,
+    avatar: "P",
   },
   {
     name: "Rahul Mehta",
     role: "Teacher",
-    text: "I was terrified of dentists but the team here put me completely at ease. Got my braces done here and the results are stunning. Best dental clinic in Patna!",
+    text: "I was terrified of dentists but the team here put me completely at ease. Got my braces done and the results are stunning. Best dental clinic in Patna!",
     rating: 5,
+    avatar: "R",
   },
   {
     name: "Sunita Devi",
     role: "Homemaker",
     text: "Affordable and professional service. The clinic is spotlessly clean and the staff is very friendly. Teeth whitening results exceeded my expectations!",
     rating: 5,
+    avatar: "S",
   },
   {
     name: "Amit Kumar",
     role: "Business Owner",
     text: "Got dental implants here and couldn't be happier. The procedure was smooth and the follow-up care was exceptional. I smile with confidence now!",
     rating: 5,
+    avatar: "A",
   },
 ];
 
 const TRUST_PILLARS = [
   {
-    icon: Shield,
-    title: "Expert Dentists",
-    desc: "BDS & MDS qualified specialists with 10+ years experience",
+    icon: Award,
+    title: "10+ Years Experience",
+    value: "10+",
+    desc: "Years serving Patna",
+    color: "#0EA5E9",
+    bg: "rgba(14,165,233,0.1)",
   },
   {
-    icon: Sparkles,
+    icon: Users,
+    title: "500+ Happy Patients",
+    value: "500+",
+    desc: "Smiles transformed",
+    color: "#22C55E",
+    bg: "rgba(34,197,94,0.1)",
+  },
+  {
+    icon: Zap,
     title: "Modern Equipment",
-    desc: "Digital X-rays, laser dentistry, and latest sterilization tech",
+    value: "100%",
+    desc: "Digital & laser tech",
+    color: "#6366F1",
+    bg: "rgba(99,102,241,0.1)",
   },
   {
     icon: Heart,
     title: "Gentle Approach",
-    desc: "Anxiety-free, pain-minimized treatments for all ages",
-  },
-  {
-    icon: CheckCircle,
-    title: "Affordable Care",
-    desc: "Transparent pricing with flexible payment options",
+    value: "4.9★",
+    desc: "Patient satisfaction",
+    color: "#0EA5E9",
+    bg: "rgba(14,165,233,0.1)",
   },
 ];
 
@@ -143,20 +173,96 @@ const INITIAL_FORM: FormState = {
   notes: "",
 };
 
+const glassStyle: React.CSSProperties = {
+  background: "rgba(255,255,255,0.7)",
+  backdropFilter: "blur(12px)",
+  WebkitBackdropFilter: "blur(12px)",
+  border: "1px solid rgba(255,255,255,0.5)",
+  boxShadow: "0 8px 32px rgba(14,165,233,0.08)",
+};
+
+const glassStrongStyle: React.CSSProperties = {
+  background: "rgba(255,255,255,0.85)",
+  backdropFilter: "blur(20px)",
+  WebkitBackdropFilter: "blur(20px)",
+  border: "1px solid rgba(255,255,255,0.6)",
+  boxShadow: "0 8px 40px rgba(14,165,233,0.12)",
+};
+
 export default function Home() {
   const { actor } = useActor();
   const [scrolled, setScrolled] = useState(false);
+  const [activeSection, setActiveSection] = useState("home");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const carouselRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", handler);
     return () => window.removeEventListener("scroll", handler);
   }, []);
+
+  // Active section tracking
+  useEffect(() => {
+    const sections = [
+      "home",
+      "about",
+      "services",
+      "testimonials",
+      "booking",
+      "contact",
+    ];
+    const observers: IntersectionObserver[] = [];
+    for (const id of sections) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const obs = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) setActiveSection(id);
+        },
+        { threshold: 0.4 },
+      );
+      obs.observe(el);
+      observers.push(obs);
+    }
+    return () => {
+      for (const o of observers) o.disconnect();
+    };
+  }, []);
+
+  // Auto-sliding carousel
+  useEffect(() => {
+    carouselRef.current = setInterval(() => {
+      setCarouselIndex((prev) => (prev + 1) % TESTIMONIALS.length);
+    }, 4000);
+    return () => {
+      if (carouselRef.current) clearInterval(carouselRef.current);
+    };
+  }, []);
+
+  function resetCarouselTimer() {
+    if (carouselRef.current) clearInterval(carouselRef.current);
+    carouselRef.current = setInterval(() => {
+      setCarouselIndex((prev) => (prev + 1) % TESTIMONIALS.length);
+    }, 4000);
+  }
+
+  function prevSlide() {
+    setCarouselIndex(
+      (prev) => (prev - 1 + TESTIMONIALS.length) % TESTIMONIALS.length,
+    );
+    resetCarouselTimer();
+  }
+
+  function nextSlide() {
+    setCarouselIndex((prev) => (prev + 1) % TESTIMONIALS.length);
+    resetCarouselTimer();
+  }
 
   function scrollToBooking() {
     document.getElementById("booking")?.scrollIntoView({ behavior: "smooth" });
@@ -173,7 +279,6 @@ export default function Home() {
     if (
       !form.name ||
       !form.phone ||
-      !form.email ||
       !form.date ||
       !form.time ||
       !form.treatment
@@ -181,60 +286,81 @@ export default function Home() {
       setFormError("Please fill in all required fields.");
       return;
     }
-    if (!actor) {
-      setFormError("Connection not ready. Please try again.");
-      return;
-    }
     setIsSubmitting(true);
+    const message = `Hello ${CLINIC_NAME}, I would like to book an appointment.\n\nName: ${form.name}\nPhone: ${form.phone}\nEmail: ${form.email}\nDate: ${form.date}\nTime: ${form.time}\nTreatment: ${form.treatment}\nNotes: ${form.notes}`;
     try {
-      await actor.submitAppointment(
-        form.name,
-        form.phone,
-        form.email,
-        form.date,
-        form.time,
-        form.treatment,
-        form.notes,
-      );
-      const message = `Hello ${CLINIC_NAME}, I have booked an appointment. Here are my details:\nName: ${form.name}\nPhone: ${form.phone}\nEmail: ${form.email}\nDate: ${form.date}\nTime: ${form.time}\nTreatment: ${form.treatment}\nNotes: ${form.notes}`;
-      window.open(
-        `https://wa.me/${CLINIC_WA}?text=${encodeURIComponent(message)}`,
-        "_blank",
-      );
-      setSubmitSuccess(true);
-      setForm(INITIAL_FORM);
-    } catch {
-      setFormError("Something went wrong. Please try again.");
-    } finally {
-      setIsSubmitting(false);
+      if (actor) {
+        await actor.submitAppointment(
+          form.name,
+          form.phone,
+          form.email,
+          form.date,
+          form.time,
+          form.treatment,
+          form.notes,
+        );
+      }
+    } catch (err) {
+      console.error("Backend save failed:", err);
     }
+    window.open(
+      `https://wa.me/${CLINIC_WA}?text=${encodeURIComponent(message)}`,
+      "_blank",
+    );
+    setSubmitSuccess(true);
+    setForm(INITIAL_FORM);
+    setIsSubmitting(false);
   }
 
   const navLinks = [
-    { href: "#home", label: "Home" },
-    { href: "#about", label: "About" },
-    { href: "#services", label: "Services" },
-    { href: "#testimonials", label: "Testimonials" },
-    { href: "#booking", label: "Book Appointment" },
-    { href: "#contact", label: "Contact" },
+    { href: "#home", label: "Home", id: "home" },
+    { href: "#about", label: "About", id: "about" },
+    { href: "#services", label: "Services", id: "services" },
+    { href: "#testimonials", label: "Testimonials", id: "testimonials" },
+    { href: "#booking", label: "Book Appointment", id: "booking" },
+    { href: "#contact", label: "Contact", id: "contact" },
   ];
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Navbar */}
+    <div
+      className="min-h-screen"
+      style={{ background: "#F8FAFC", fontFamily: "'Poppins', sans-serif" }}
+    >
+      {/* ── NAVBAR ── */}
       <header
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          scrolled ? "bg-white shadow-md" : "bg-white/95 backdrop-blur-sm"
-        }`}
+        className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
+        style={
+          scrolled
+            ? glassStrongStyle
+            : {
+                background: "rgba(248,250,252,0.6)",
+                backdropFilter: "blur(20px)",
+                WebkitBackdropFilter: "blur(20px)",
+                borderBottom: "1px solid rgba(14,165,233,0.08)",
+              }
+        }
       >
         <div className="container mx-auto px-4">
           <div className="h-16 flex items-center justify-between">
             <a href="#home" className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-clinic-blue-light flex items-center justify-center">
-                <Stethoscope className="w-5 h-5 text-clinic-blue" />
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center"
+                style={{
+                  background: "linear-gradient(135deg, #0EA5E9, #6366F1)",
+                }}
+              >
+                <Stethoscope className="w-5 h-5 text-white" />
               </div>
               <div className="leading-tight">
-                <span className="font-bold text-clinic-navy text-sm block">
+                <span
+                  className="font-bold text-sm block"
+                  style={{
+                    background: "linear-gradient(135deg, #0EA5E9, #6366F1)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                  }}
+                >
                   Mediverse
                 </span>
                 <span className="text-xs text-muted-foreground">
@@ -243,13 +369,20 @@ export default function Home() {
               </div>
             </a>
 
-            {/* Desktop Nav */}
-            <nav className="hidden md:flex items-center gap-6">
+            <nav className="hidden md:flex items-center gap-1">
               {navLinks.map((l) => (
                 <a
                   key={l.href}
                   href={l.href}
-                  className="text-sm font-medium text-foreground/70 hover:text-clinic-blue transition-colors"
+                  className="text-sm font-medium px-3 py-1.5 rounded-full transition-all duration-200"
+                  style={
+                    activeSection === l.id
+                      ? {
+                          background: "rgba(14,165,233,0.12)",
+                          color: "#0EA5E9",
+                        }
+                      : { color: "#475569" }
+                  }
                   data-ocid="nav.link"
                 >
                   {l.label}
@@ -260,53 +393,73 @@ export default function Home() {
             <div className="hidden md:flex items-center gap-3">
               <Button
                 size="sm"
-                className="bg-clinic-blue hover:bg-clinic-blue-dark text-white"
+                className="btn-shine btn-glow text-white font-semibold rounded-full px-5"
+                style={{
+                  background: "linear-gradient(135deg, #0EA5E9, #6366F1)",
+                  border: "none",
+                }}
                 onClick={scrollToBooking}
                 data-ocid="nav.primary_button"
               >
-                Book Appointment
+                Book Now
               </Button>
             </div>
 
-            {/* Mobile */}
             <button
               type="button"
-              className="md:hidden p-2"
+              className="md:hidden p-2 rounded-xl"
+              style={{ background: "rgba(14,165,233,0.08)" }}
               onClick={() => setMobileOpen(!mobileOpen)}
               aria-label="Toggle menu"
               data-ocid="nav.toggle"
             >
               {mobileOpen ? (
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5" style={{ color: "#0EA5E9" }} />
               ) : (
-                <Menu className="w-5 h-5" />
+                <Menu className="w-5 h-5" style={{ color: "#0EA5E9" }} />
               )}
             </button>
           </div>
         </div>
 
-        {/* Mobile Menu */}
         <AnimatePresence>
           {mobileOpen && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="md:hidden bg-white border-t"
+              className="md:hidden"
+              style={{
+                borderTop: "1px solid rgba(14,165,233,0.1)",
+                background: "rgba(248,250,252,0.95)",
+                backdropFilter: "blur(20px)",
+              }}
             >
-              <div className="container mx-auto px-4 py-4 flex flex-col gap-3">
+              <div className="container mx-auto px-4 py-4 flex flex-col gap-2">
                 {navLinks.map((l) => (
                   <a
                     key={l.href}
                     href={l.href}
-                    className="text-sm font-medium py-2 border-b border-border last:border-0"
+                    className="text-sm font-medium py-2.5 px-4 rounded-xl transition-all"
+                    style={
+                      activeSection === l.id
+                        ? {
+                            background: "rgba(14,165,233,0.1)",
+                            color: "#0EA5E9",
+                          }
+                        : { color: "#475569" }
+                    }
                     onClick={() => setMobileOpen(false)}
                   >
                     {l.label}
                   </a>
                 ))}
                 <Button
-                  className="bg-clinic-blue hover:bg-clinic-blue-dark text-white w-full mt-2"
+                  className="btn-shine text-white w-full mt-2 rounded-full"
+                  style={{
+                    background: "linear-gradient(135deg, #0EA5E9, #6366F1)",
+                    border: "none",
+                  }}
                   onClick={scrollToBooking}
                 >
                   Book Appointment
@@ -317,36 +470,101 @@ export default function Home() {
         </AnimatePresence>
       </header>
 
-      {/* Hero */}
+      {/* ── HERO ── */}
       <section
         id="home"
-        className="clinic-gradient pt-16 min-h-[90vh] flex items-center"
+        className="relative min-h-screen flex items-center overflow-hidden"
+        style={{
+          background:
+            "linear-gradient(135deg, #0c1a3a 0%, #0a2a6e 35%, #0e4f8a 65%, #0d6ea8 100%)",
+        }}
       >
-        <div className="container mx-auto px-4 py-20">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
+        {/* Animated blobs */}
+        <div
+          className="blob"
+          style={{
+            width: 500,
+            height: 500,
+            background: "#0EA5E9",
+            top: "-100px",
+            left: "-100px",
+            animationDelay: "0s",
+          }}
+        />
+        <div
+          className="blob"
+          style={{
+            width: 400,
+            height: 400,
+            background: "#22C55E",
+            bottom: "-80px",
+            right: "10%",
+            animationDelay: "2.5s",
+          }}
+        />
+        <div
+          className="blob"
+          style={{
+            width: 350,
+            height: 350,
+            background: "#6366F1",
+            top: "30%",
+            right: "-50px",
+            animationDelay: "5s",
+          }}
+        />
+
+        <div className="container mx-auto px-4 pt-24 pb-16 relative z-10">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
             <motion.div
-              initial={{ opacity: 0, y: 30 }}
+              initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7 }}
-              className="text-white"
+              transition={{ duration: 0.8, ease: "easeOut" }}
             >
-              <div className="inline-flex items-center gap-2 bg-white/20 rounded-full px-4 py-1.5 text-sm mb-6">
+              <div
+                className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm mb-6 font-medium"
+                style={{
+                  background: "rgba(255,255,255,0.15)",
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  color: "#bae6fd",
+                }}
+              >
                 <Sparkles className="w-4 h-4" />
-                Trusted by 5000+ patients in Patna
+                Trusted by 500+ patients in Patna
               </div>
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-4">
-                Book Your Dental
+
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight mb-5">
+                <span className="text-white">Your Health,</span>
                 <br />
-                <span className="text-yellow-300">Appointment Today</span>
+                <span
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #38bdf8, #86efac, #a5b4fc)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                  }}
+                >
+                  Our Priority
+                </span>
               </h1>
-              <p className="text-lg text-blue-100 mb-8 max-w-lg">
-                Expert dental care you can trust. Professional, gentle, and
-                affordable treatments for you and your family.
+
+              <p
+                className="text-lg mb-8 max-w-lg"
+                style={{ color: "rgba(186,230,253,0.85)" }}
+              >
+                Trusted dental care in Jogipur — modern treatments,
+                compassionate service, and a commitment to your perfect smile.
               </p>
-              <div className="flex flex-wrap gap-4">
+
+              <div className="flex flex-wrap gap-4 mb-10">
                 <Button
                   size="lg"
-                  className="bg-white text-clinic-blue hover:bg-blue-50 font-semibold shadow-lg"
+                  className="btn-shine btn-glow font-semibold text-white rounded-full px-8"
+                  style={{
+                    background: "linear-gradient(135deg, #0EA5E9, #6366F1)",
+                    border: "none",
+                  }}
                   onClick={scrollToBooking}
                   data-ocid="hero.primary_button"
                 >
@@ -356,80 +574,185 @@ export default function Home() {
                 <Button
                   size="lg"
                   variant="outline"
-                  className="border-white text-white hover:bg-white/10 bg-transparent"
+                  className="rounded-full px-8 font-semibold"
+                  style={{
+                    background: "rgba(255,255,255,0.1)",
+                    border: "1px solid rgba(255,255,255,0.3)",
+                    color: "white",
+                  }}
                   asChild
                   data-ocid="hero.secondary_button"
                 >
-                  <a href={`tel:${CLINIC_PHONE}`}>
-                    <Phone className="w-4 h-4 mr-2" />
-                    Call Now
-                  </a>
+                  <a href="#about">Learn More</a>
                 </Button>
               </div>
-              <div className="flex items-center gap-6 mt-10">
-                {["5000+ Patients", "15+ Years Exp.", "Expert Dentists"].map(
+
+              {/* Trust row */}
+              <div className="flex flex-wrap gap-6">
+                {["500+ Patients", "10+ Years Exp.", "4.9★ Rating"].map(
                   (item) => (
-                    <div key={item} className="text-center">
-                      <div className="text-white/80 text-xs">{item}</div>
+                    <div key={item} className="flex items-center gap-2">
+                      <div
+                        className="w-2 h-2 rounded-full"
+                        style={{ background: "#22C55E" }}
+                      />
+                      <span
+                        className="text-sm font-medium"
+                        style={{ color: "rgba(186,230,253,0.9)" }}
+                      >
+                        {item}
+                      </span>
                     </div>
                   ),
                 )}
               </div>
             </motion.div>
 
+            {/* Floating glass stat cards */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.7, delay: 0.2 }}
-              className="flex justify-center"
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              className="hidden lg:flex flex-col gap-4 items-end"
             >
-              <div className="relative">
-                <div className="absolute inset-0 bg-white/10 rounded-3xl blur-2xl" />
-                <img
-                  src="/assets/generated/dental-hero.dim_600x500.png"
-                  alt="Dental clinic professional care"
-                  className="relative rounded-3xl shadow-2xl max-w-full h-auto"
-                  style={{ maxHeight: 420 }}
-                />
-              </div>
+              {[
+                {
+                  label: "Happy Patients",
+                  value: "500+",
+                  icon: "😊",
+                  color: "#0EA5E9",
+                },
+                {
+                  label: "Years of Care",
+                  value: "10+",
+                  icon: "🏥",
+                  color: "#22C55E",
+                },
+                {
+                  label: "Patient Rating",
+                  value: "4.9 ★",
+                  icon: "⭐",
+                  color: "#6366F1",
+                },
+              ].map((stat, i) => (
+                <motion.div
+                  key={stat.label}
+                  animate={{ y: [0, -8, 0] }}
+                  transition={{
+                    duration: 3,
+                    repeat: Number.POSITIVE_INFINITY,
+                    delay: i * 0.8,
+                    ease: "easeInOut",
+                  }}
+                  className="rounded-2xl p-4 flex items-center gap-4 w-56"
+                  style={{
+                    ...glassStyle,
+                    border: "1px solid rgba(255,255,255,0.3)",
+                    background: "rgba(255,255,255,0.12)",
+                    backdropFilter: "blur(16px)",
+                  }}
+                >
+                  <div className="text-3xl">{stat.icon}</div>
+                  <div>
+                    <div className="text-xl font-bold text-white">
+                      {stat.value}
+                    </div>
+                    <div
+                      className="text-xs"
+                      style={{ color: "rgba(186,230,253,0.8)" }}
+                    >
+                      {stat.label}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
             </motion.div>
           </div>
         </div>
+
+        {/* Bottom wave */}
+        <div className="absolute bottom-0 left-0 right-0">
+          <svg
+            viewBox="0 0 1440 60"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            role="img"
+            aria-label="Wave decoration"
+          >
+            <title>Wave decoration</title>
+            <path
+              d="M0 60L1440 60L1440 20C1200 60 960 0 720 20C480 40 240 0 0 20L0 60Z"
+              fill="#F8FAFC"
+            />
+          </svg>
+        </div>
       </section>
 
-      {/* About */}
-      <section id="about" className="py-20 clinic-gradient-soft">
+      {/* ── ABOUT ── */}
+      <section id="about" className="py-24 soft-gradient">
         <div className="container mx-auto px-4">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-12"
+            className="text-center mb-14"
           >
-            <h2 className="text-3xl md:text-4xl font-bold text-clinic-navy mb-4">
-              Why Choose Mediverse?
+            <div
+              className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium mb-4"
+              style={{ background: "rgba(14,165,233,0.1)", color: "#0EA5E9" }}
+            >
+              <Shield className="w-4 h-4" /> About Mediverse
+            </div>
+            <h2
+              className="text-4xl md:text-5xl font-bold mb-4"
+              style={{ color: "#0f172a" }}
+            >
+              Why Choose{" "}
+              <span
+                style={{
+                  background: "linear-gradient(135deg, #0EA5E9, #6366F1)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                Mediverse?
+              </span>
             </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto text-base">
+            <p className="text-muted-foreground max-w-2xl mx-auto text-base leading-relaxed">
               At Mediverse Dental Clinic, we combine advanced technology with
-              compassionate care to deliver outstanding dental results.
-              Conveniently located in Kankarbagh, Patna, we serve patients of
-              all ages.
+              compassionate care to deliver outstanding dental results. Located
+              in Kankarbagh, Patna — serving patients of all ages.
             </p>
           </motion.div>
+
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {TRUST_PILLARS.map((pillar, i) => (
               <motion.div
                 key={pillar.title}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 24 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
-                className="bg-white rounded-2xl p-6 shadow-card card-hover border border-border/50 text-center"
+                className="rounded-2xl p-6 text-center card-hover cursor-default"
+                style={glassStyle}
               >
-                <div className="w-14 h-14 rounded-2xl bg-clinic-blue-light flex items-center justify-center mx-auto mb-4">
-                  <pillar.icon className="w-7 h-7 text-clinic-blue" />
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                  style={{ background: pillar.bg }}
+                >
+                  <pillar.icon
+                    className="w-7 h-7"
+                    style={{ color: pillar.color }}
+                  />
                 </div>
-                <h3 className="font-bold text-clinic-navy mb-2">
+                <div
+                  className="text-2xl font-bold mb-1"
+                  style={{ color: pillar.color }}
+                >
+                  {pillar.value}
+                </div>
+                <h3 className="font-semibold mb-1" style={{ color: "#0f172a" }}>
                   {pillar.title}
                 </h3>
                 <p className="text-sm text-muted-foreground">{pillar.desc}</p>
@@ -439,44 +762,78 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Services */}
-      <section id="services" className="py-20 bg-white">
+      {/* ── SERVICES ── */}
+      <section
+        id="services"
+        className="py-24"
+        style={{ background: "#F8FAFC" }}
+      >
         <div className="container mx-auto px-4">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-12"
+            className="text-center mb-14"
           >
-            <h2 className="text-3xl md:text-4xl font-bold text-clinic-navy mb-4">
-              Our Dental Services
+            <div
+              className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium mb-4"
+              style={{ background: "rgba(34,197,94,0.1)", color: "#22C55E" }}
+            >
+              <Sparkles className="w-4 h-4" /> Our Services
+            </div>
+            <h2
+              className="text-4xl md:text-5xl font-bold mb-4"
+              style={{ color: "#0f172a" }}
+            >
+              Comprehensive{" "}
+              <span
+                style={{
+                  background: "linear-gradient(135deg, #22C55E, #0EA5E9)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                Dental Care
+              </span>
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              Comprehensive dental care covering everything from routine
-              cleanings to advanced restorative treatments.
+              From routine cleanings to advanced restorative treatments — we
+              cover it all with expertise and care.
             </p>
           </motion.div>
+
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {SERVICES.map((service, i) => (
               <motion.div
                 key={service.name}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 24 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.08 }}
-                className="bg-white rounded-2xl p-6 shadow-card card-hover border border-border/50 group cursor-default"
+                transition={{ delay: i * 0.07 }}
+                className="rounded-2xl p-6 card-hover cursor-default group"
+                style={glassStyle}
               >
-                <div className="text-4xl mb-4">{service.icon}</div>
-                <h3 className="font-bold text-clinic-navy text-lg mb-2 group-hover:text-clinic-blue transition-colors">
+                <div
+                  className="text-4xl mb-4 w-16 h-16 flex items-center justify-center rounded-2xl"
+                  style={{ background: `${service.color}18` }}
+                >
+                  {service.icon}
+                </div>
+                <h3
+                  className="font-bold text-lg mb-2 transition-colors"
+                  style={{ color: "#0f172a" }}
+                >
                   {service.name}
                 </h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">
+                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
                   {service.desc}
                 </p>
                 <button
                   type="button"
                   onClick={scrollToBooking}
-                  className="mt-4 text-clinic-blue text-sm font-medium flex items-center gap-1 hover:gap-2 transition-all"
+                  className="text-sm font-semibold flex items-center gap-1 transition-all hover:gap-2"
+                  style={{ color: service.color }}
                   data-ocid="services.primary_button"
                 >
                   Book Now <ChevronRight className="w-4 h-4" />
@@ -487,79 +844,192 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section id="testimonials" className="py-20 clinic-gradient-soft">
+      {/* ── TESTIMONIALS ── */}
+      <section id="testimonials" className="py-24 soft-gradient">
         <div className="container mx-auto px-4">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-12"
+            className="text-center mb-14"
           >
-            <h2 className="text-3xl md:text-4xl font-bold text-clinic-navy mb-4">
-              What Our Patients Say
+            <div
+              className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium mb-4"
+              style={{ background: "rgba(99,102,241,0.1)", color: "#6366F1" }}
+            >
+              <Star className="w-4 h-4" /> Patient Reviews
+            </div>
+            <h2
+              className="text-4xl md:text-5xl font-bold mb-4"
+              style={{ color: "#0f172a" }}
+            >
+              What Our{" "}
+              <span
+                style={{
+                  background: "linear-gradient(135deg, #6366F1, #0EA5E9)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                Patients Say
+              </span>
             </h2>
             <p className="text-muted-foreground">
               Real reviews from real patients who trust Mediverse for their
               dental care.
             </p>
           </motion.div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {TESTIMONIALS.map((t, i) => (
+
+          {/* Carousel */}
+          <div className="max-w-3xl mx-auto relative">
+            <AnimatePresence mode="wait">
               <motion.div
-                key={t.name}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="bg-white rounded-2xl p-6 shadow-card card-hover border border-border/50"
+                key={carouselIndex}
+                initial={{ opacity: 0, x: 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -40 }}
+                transition={{ duration: 0.4 }}
+                className="rounded-3xl p-8 md:p-10"
+                style={glassStrongStyle}
               >
-                <div className="flex gap-0.5 mb-3">
-                  {Array.from({ length: t.rating }, (_, j) => (
+                <div className="flex gap-1 mb-4">
+                  {Array.from(
+                    { length: TESTIMONIALS[carouselIndex].rating },
+                    (_, j) => j,
+                  ).map((starPos) => (
                     <Star
-                      key={`${t.name}-star-${j}`}
-                      className="w-4 h-4 fill-yellow-400 text-yellow-400"
+                      key={`star-${TESTIMONIALS[carouselIndex].name}-${starPos}`}
+                      className="w-5 h-5 fill-yellow-400 text-yellow-400"
                     />
                   ))}
                 </div>
-                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                  &ldquo;{t.text}&rdquo;
+                <p
+                  className="text-base leading-relaxed mb-6"
+                  style={{ color: "#334155" }}
+                >
+                  &ldquo;{TESTIMONIALS[carouselIndex].text}&rdquo;
                 </p>
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-clinic-blue-light flex items-center justify-center">
-                    <span className="text-xs font-bold text-clinic-blue">
-                      {t.name[0]}
-                    </span>
+                <div className="flex items-center gap-4">
+                  <div
+                    className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg"
+                    style={{
+                      background: "linear-gradient(135deg, #0EA5E9, #6366F1)",
+                    }}
+                  >
+                    {TESTIMONIALS[carouselIndex].avatar}
                   </div>
                   <div>
-                    <p className="font-semibold text-sm text-clinic-navy">
-                      {t.name}
+                    <p className="font-bold" style={{ color: "#0f172a" }}>
+                      {TESTIMONIALS[carouselIndex].name}
                     </p>
-                    <p className="text-xs text-muted-foreground">{t.role}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {TESTIMONIALS[carouselIndex].role}
+                    </p>
                   </div>
                 </div>
               </motion.div>
-            ))}
+            </AnimatePresence>
+
+            {/* Controls */}
+            <div className="flex items-center justify-center gap-4 mt-6">
+              <button
+                type="button"
+                onClick={prevSlide}
+                className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110"
+                style={glassStyle}
+                data-ocid="testimonials.secondary_button"
+              >
+                <ChevronLeft className="w-5 h-5" style={{ color: "#0EA5E9" }} />
+              </button>
+              <div className="flex gap-2">
+                {TESTIMONIALS.map((t, idx) => (
+                  <button
+                    type="button"
+                    key={`dot-${t.name}`}
+                    onClick={() => {
+                      setCarouselIndex(idx);
+                      resetCarouselTimer();
+                    }}
+                    className="transition-all duration-300 rounded-full"
+                    style={{
+                      width: idx === carouselIndex ? 24 : 8,
+                      height: 8,
+                      background:
+                        idx === carouselIndex
+                          ? "#0EA5E9"
+                          : "rgba(14,165,233,0.3)",
+                    }}
+                    aria-label={`Go to testimonial ${idx + 1}`}
+                  />
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={nextSlide}
+                className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110"
+                style={glassStyle}
+                data-ocid="testimonials.primary_button"
+              >
+                <ChevronRight
+                  className="w-5 h-5"
+                  style={{ color: "#0EA5E9" }}
+                />
+              </button>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Booking Form */}
-      <section id="booking" className="py-20 bg-white">
-        <div className="container mx-auto px-4">
+      {/* ── BOOKING FORM ── */}
+      <section
+        id="booking"
+        className="py-24 relative overflow-hidden"
+        style={{
+          background: "linear-gradient(135deg, #0EA5E9 0%, #6366F1 100%)",
+        }}
+      >
+        <div
+          className="blob"
+          style={{
+            width: 400,
+            height: 400,
+            background: "#22C55E",
+            top: "-80px",
+            right: "-80px",
+            animationDelay: "1s",
+            opacity: 0.3,
+          }}
+        />
+        <div
+          className="blob"
+          style={{
+            width: 300,
+            height: 300,
+            background: "#0EA5E9",
+            bottom: "-60px",
+            left: "-60px",
+            animationDelay: "3s",
+            opacity: 0.3,
+          }}
+        />
+
+        <div className="container mx-auto px-4 relative z-10">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             className="text-center mb-12"
           >
-            <h2 className="text-3xl md:text-4xl font-bold text-clinic-navy mb-4">
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
               Book Your Appointment
             </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">
-              Fill in the form below and we&apos;ll confirm your appointment.
-              You&apos;ll also be redirected to WhatsApp to send your details
-              directly.
+            <p
+              style={{ color: "rgba(255,255,255,0.8)" }}
+              className="max-w-xl mx-auto"
+            >
+              Fill in the form and we&apos;ll connect you instantly via WhatsApp
+              to confirm your appointment.
             </p>
           </motion.div>
 
@@ -570,22 +1040,36 @@ export default function Home() {
                   key="success"
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="bg-green-50 border border-green-200 rounded-2xl p-10 text-center"
+                  className="rounded-3xl p-10 text-center"
+                  style={glassStrongStyle}
                   data-ocid="booking.success_state"
                 >
-                  <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle className="w-8 h-8 text-green-600" />
+                  <div
+                    className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
+                    style={{ background: "rgba(34,197,94,0.15)" }}
+                  >
+                    <CheckCircle
+                      className="w-10 h-10"
+                      style={{ color: "#22C55E" }}
+                    />
                   </div>
-                  <h3 className="text-xl font-bold text-green-800 mb-2">
+                  <h3
+                    className="text-2xl font-bold mb-2"
+                    style={{ color: "#0f172a" }}
+                  >
                     Appointment Booked!
                   </h3>
-                  <p className="text-green-700 mb-6">
-                    Your appointment request has been submitted. WhatsApp has
-                    opened to send your details directly to us.
+                  <p className="text-muted-foreground mb-6">
+                    Your request has been submitted. WhatsApp has opened to send
+                    your details directly to us.
                   </p>
                   <Button
                     onClick={() => setSubmitSuccess(false)}
-                    className="bg-clinic-blue hover:bg-clinic-blue-dark text-white"
+                    className="btn-shine text-white rounded-full px-8"
+                    style={{
+                      background: "linear-gradient(135deg, #0EA5E9, #6366F1)",
+                      border: "none",
+                    }}
                     data-ocid="booking.secondary_button"
                   >
                     Book Another Appointment
@@ -597,12 +1081,17 @@ export default function Home() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   onSubmit={handleSubmit}
-                  className="bg-white rounded-2xl shadow-card border border-border/50 p-8"
+                  className="rounded-3xl p-8"
+                  style={glassStrongStyle}
                 >
                   <div className="grid sm:grid-cols-2 gap-5">
                     <div className="space-y-1.5">
-                      <Label htmlFor="b-name">
-                        Full Name <span className="text-destructive">*</span>
+                      <Label
+                        htmlFor="b-name"
+                        className="font-medium"
+                        style={{ color: "#0f172a" }}
+                      >
+                        Full Name <span style={{ color: "#ef4444" }}>*</span>
                       </Label>
                       <Input
                         id="b-name"
@@ -610,12 +1099,21 @@ export default function Home() {
                         value={form.name}
                         onChange={(e) => updateForm("name", e.target.value)}
                         required
+                        className="rounded-xl"
+                        style={{
+                          background: "rgba(255,255,255,0.8)",
+                          border: "1px solid rgba(14,165,233,0.2)",
+                        }}
                         data-ocid="booking.input"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="b-phone">
-                        Phone Number <span className="text-destructive">*</span>
+                      <Label
+                        htmlFor="b-phone"
+                        className="font-medium"
+                        style={{ color: "#0f172a" }}
+                      >
+                        Phone Number <span style={{ color: "#ef4444" }}>*</span>
                       </Label>
                       <Input
                         id="b-phone"
@@ -623,13 +1121,21 @@ export default function Home() {
                         value={form.phone}
                         onChange={(e) => updateForm("phone", e.target.value)}
                         required
+                        className="rounded-xl"
+                        style={{
+                          background: "rgba(255,255,255,0.8)",
+                          border: "1px solid rgba(14,165,233,0.2)",
+                        }}
                         data-ocid="booking.input"
                       />
                     </div>
                     <div className="space-y-1.5 sm:col-span-2">
-                      <Label htmlFor="b-email">
-                        Email Address{" "}
-                        <span className="text-destructive">*</span>
+                      <Label
+                        htmlFor="b-email"
+                        className="font-medium"
+                        style={{ color: "#0f172a" }}
+                      >
+                        Email Address
                       </Label>
                       <Input
                         id="b-email"
@@ -637,14 +1143,22 @@ export default function Home() {
                         placeholder="e.g. you@email.com"
                         value={form.email}
                         onChange={(e) => updateForm("email", e.target.value)}
-                        required
+                        className="rounded-xl"
+                        style={{
+                          background: "rgba(255,255,255,0.8)",
+                          border: "1px solid rgba(14,165,233,0.2)",
+                        }}
                         data-ocid="booking.input"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="b-date">
+                      <Label
+                        htmlFor="b-date"
+                        className="font-medium"
+                        style={{ color: "#0f172a" }}
+                      >
                         Preferred Date{" "}
-                        <span className="text-destructive">*</span>
+                        <span style={{ color: "#ef4444" }}>*</span>
                       </Label>
                       <Input
                         id="b-date"
@@ -652,13 +1166,22 @@ export default function Home() {
                         value={form.date}
                         onChange={(e) => updateForm("date", e.target.value)}
                         required
+                        className="rounded-xl"
+                        style={{
+                          background: "rgba(255,255,255,0.8)",
+                          border: "1px solid rgba(14,165,233,0.2)",
+                        }}
                         data-ocid="booking.input"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="b-time">
+                      <Label
+                        htmlFor="b-time"
+                        className="font-medium"
+                        style={{ color: "#0f172a" }}
+                      >
                         Preferred Time{" "}
-                        <span className="text-destructive">*</span>
+                        <span style={{ color: "#ef4444" }}>*</span>
                       </Label>
                       <Input
                         id="b-time"
@@ -666,19 +1189,34 @@ export default function Home() {
                         value={form.time}
                         onChange={(e) => updateForm("time", e.target.value)}
                         required
+                        className="rounded-xl"
+                        style={{
+                          background: "rgba(255,255,255,0.8)",
+                          border: "1px solid rgba(14,165,233,0.2)",
+                        }}
                         data-ocid="booking.input"
                       />
                     </div>
                     <div className="space-y-1.5 sm:col-span-2">
-                      <Label>
+                      <Label
+                        className="font-medium"
+                        style={{ color: "#0f172a" }}
+                      >
                         Treatment Type{" "}
-                        <span className="text-destructive">*</span>
+                        <span style={{ color: "#ef4444" }}>*</span>
                       </Label>
                       <Select
                         value={form.treatment}
                         onValueChange={(v) => updateForm("treatment", v)}
                       >
-                        <SelectTrigger data-ocid="booking.select">
+                        <SelectTrigger
+                          className="rounded-xl"
+                          style={{
+                            background: "rgba(255,255,255,0.8)",
+                            border: "1px solid rgba(14,165,233,0.2)",
+                          }}
+                          data-ocid="booking.select"
+                        >
                           <SelectValue placeholder="Select treatment" />
                         </SelectTrigger>
                         <SelectContent>
@@ -691,13 +1229,24 @@ export default function Home() {
                       </Select>
                     </div>
                     <div className="space-y-1.5 sm:col-span-2">
-                      <Label htmlFor="b-notes">Additional Notes</Label>
+                      <Label
+                        htmlFor="b-notes"
+                        className="font-medium"
+                        style={{ color: "#0f172a" }}
+                      >
+                        Additional Notes
+                      </Label>
                       <Textarea
                         id="b-notes"
                         placeholder="Any specific concerns or questions..."
                         value={form.notes}
                         onChange={(e) => updateForm("notes", e.target.value)}
                         rows={3}
+                        className="rounded-xl"
+                        style={{
+                          background: "rgba(255,255,255,0.8)",
+                          border: "1px solid rgba(14,165,233,0.2)",
+                        }}
                         data-ocid="booking.textarea"
                       />
                     </div>
@@ -705,7 +1254,8 @@ export default function Home() {
 
                   {formError && (
                     <p
-                      className="text-sm text-destructive mt-3 font-medium"
+                      className="text-sm mt-3 font-medium"
+                      style={{ color: "#ef4444" }}
                       data-ocid="booking.error_state"
                     >
                       {formError}
@@ -715,18 +1265,20 @@ export default function Home() {
                   <Button
                     type="submit"
                     size="lg"
-                    className="w-full mt-6 bg-clinic-blue hover:bg-clinic-blue-dark text-white font-semibold"
+                    className="w-full mt-6 btn-shine btn-glow-green text-white font-bold rounded-full text-base"
+                    style={{
+                      background: "linear-gradient(135deg, #22C55E, #0EA5E9)",
+                      border: "none",
+                    }}
                     disabled={isSubmitting}
                     data-ocid="booking.submit_button"
                   >
                     {isSubmitting ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                     ) : (
-                      <MessageCircle className="mr-2 h-4 w-4" />
+                      <MessageCircle className="mr-2 h-5 w-5" />
                     )}
-                    {isSubmitting
-                      ? "Booking..."
-                      : "Book Appointment & Open WhatsApp"}
+                    {isSubmitting ? "Booking..." : "Book via WhatsApp"}
                   </Button>
                 </motion.form>
               )}
@@ -735,198 +1287,273 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Contact */}
-      <section id="contact" className="py-20 clinic-gradient-soft">
+      {/* ── CONTACT ── */}
+      <section id="contact" className="py-24 soft-gradient">
         <div className="container mx-auto px-4">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-12"
+            className="text-center mb-14"
           >
-            <h2 className="text-3xl md:text-4xl font-bold text-clinic-navy mb-4">
-              Contact Us
+            <div
+              className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium mb-4"
+              style={{ background: "rgba(14,165,233,0.1)", color: "#0EA5E9" }}
+            >
+              <MapPin className="w-4 h-4" /> Find Us
+            </div>
+            <h2
+              className="text-4xl md:text-5xl font-bold mb-4"
+              style={{ color: "#0f172a" }}
+            >
+              Get In{" "}
+              <span
+                style={{
+                  background: "linear-gradient(135deg, #0EA5E9, #22C55E)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                Touch
+              </span>
             </h2>
             <p className="text-muted-foreground">
               We&apos;re here to help. Reach out to us anytime.
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 gap-10 items-start">
-            <div className="space-y-6">
-              <div className="bg-white rounded-2xl p-6 shadow-card border border-border/50">
-                <h3 className="font-bold text-clinic-navy mb-4">
-                  Get In Touch
-                </h3>
-                <div className="space-y-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-clinic-blue-light flex items-center justify-center flex-shrink-0">
-                      <MapPin className="w-4 h-4 text-clinic-blue" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-0.5">
-                        Address
-                      </p>
-                      <p className="text-sm font-medium text-clinic-navy">
-                        {CLINIC_ADDRESS}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-clinic-blue-light flex items-center justify-center flex-shrink-0">
-                      <Phone className="w-4 h-4 text-clinic-blue" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-0.5">
-                        Phone
-                      </p>
-                      <a
-                        href={`tel:${CLINIC_PHONE}`}
-                        className="text-sm font-medium text-clinic-blue hover:underline"
-                      >
-                        {CLINIC_PHONE}
-                      </a>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-clinic-blue-light flex items-center justify-center flex-shrink-0">
-                      <Mail className="w-4 h-4 text-clinic-blue" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-0.5">
-                        Email
-                      </p>
-                      <a
-                        href={`mailto:${CLINIC_EMAIL}`}
-                        className="text-sm font-medium text-clinic-blue hover:underline"
-                      >
-                        {CLINIC_EMAIL}
-                      </a>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-3 mt-6">
-                  <Button
-                    className="flex-1 bg-clinic-blue hover:bg-clinic-blue-dark text-white"
-                    asChild
-                    data-ocid="contact.primary_button"
-                  >
-                    <a href={`tel:${CLINIC_PHONE}`}>
-                      <Phone className="w-4 h-4 mr-2" /> Call Now
-                    </a>
-                  </Button>
-                  <Button
-                    className="flex-1 bg-[#25d366] hover:bg-[#20b655] text-white"
-                    asChild
-                    data-ocid="contact.secondary_button"
-                  >
-                    <a
-                      href={`https://wa.me/${CLINIC_WA}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <MessageCircle className="w-4 h-4 mr-2" /> WhatsApp
-                    </a>
-                  </Button>
-                </div>
-              </div>
-            </div>
+          <div className="grid md:grid-cols-2 gap-8 items-start">
+            <motion.div
+              initial={{ opacity: 0, x: -24 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="rounded-3xl p-8 space-y-6"
+              style={glassStyle}
+            >
+              <h3 className="font-bold text-xl" style={{ color: "#0f172a" }}>
+                Contact Information
+              </h3>
 
-            <div className="rounded-2xl overflow-hidden shadow-card border border-border/50 h-80">
+              {[
+                {
+                  icon: MapPin,
+                  label: "Address",
+                  value: CLINIC_ADDRESS,
+                  color: "#0EA5E9",
+                  href: undefined,
+                },
+                {
+                  icon: Phone,
+                  label: "Phone",
+                  value: CLINIC_PHONE,
+                  color: "#22C55E",
+                  href: `tel:${CLINIC_PHONE}`,
+                },
+                {
+                  icon: MessageCircle,
+                  label: "WhatsApp",
+                  value: "+91 9142345153",
+                  color: "#22C55E",
+                  href: `https://wa.me/${CLINIC_WA}`,
+                },
+                {
+                  icon: Clock,
+                  label: "Hours",
+                  value: "Mon–Sat: 9:00 AM – 7:00 PM",
+                  color: "#6366F1",
+                  href: undefined,
+                },
+              ].map((item) => (
+                <div key={item.label} className="flex items-start gap-4">
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: `${item.color}18` }}
+                  >
+                    <item.icon
+                      className="w-5 h-5"
+                      style={{ color: item.color }}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5 font-medium">
+                      {item.label}
+                    </p>
+                    {item.href ? (
+                      <a
+                        href={item.href}
+                        target={
+                          item.href.startsWith("http") ? "_blank" : undefined
+                        }
+                        rel="noreferrer"
+                        className="text-sm font-medium hover:underline"
+                        style={{ color: item.color }}
+                      >
+                        {item.value}
+                      </a>
+                    ) : (
+                      <p
+                        className="text-sm font-medium"
+                        style={{ color: "#334155" }}
+                      >
+                        {item.value}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  className="flex-1 btn-shine text-white rounded-full font-semibold"
+                  style={{
+                    background: "linear-gradient(135deg, #0EA5E9, #6366F1)",
+                    border: "none",
+                  }}
+                  asChild
+                  data-ocid="contact.primary_button"
+                >
+                  <a href={`tel:${CLINIC_PHONE}`}>
+                    <Phone className="w-4 h-4 mr-2" /> Call Now
+                  </a>
+                </Button>
+                <Button
+                  className="flex-1 btn-shine btn-glow-green text-white rounded-full font-semibold"
+                  style={{
+                    background: "linear-gradient(135deg, #22C55E, #16a34a)",
+                    border: "none",
+                  }}
+                  asChild
+                  data-ocid="contact.secondary_button"
+                >
+                  <a
+                    href={`https://wa.me/${CLINIC_WA}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <MessageCircle className="w-4 h-4 mr-2" /> WhatsApp
+                  </a>
+                </Button>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 24 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="rounded-3xl overflow-hidden h-96"
+              style={{ boxShadow: "0 8px 40px rgba(14,165,233,0.12)" }}
+            >
               <iframe
                 title="Mediverse Dental Clinic Location"
-                src="https://maps.google.com/maps?q=V-466+Central+School+Rd+Jogipur+Kankarbagh+Patna+Bihar+800020&output=embed"
+                src="https://maps.google.com/maps?q=Jogipur+Kankarbagh+Patna+Bihar&output=embed"
                 width="100%"
                 height="100%"
                 style={{ border: 0 }}
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
               />
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-clinic-navy text-white py-12">
+      {/* ── FOOTER ── */}
+      <footer
+        style={{ background: "#0F172A", color: "white" }}
+        className="py-14"
+      >
         <div className="container mx-auto px-4">
-          <div className="grid md:grid-cols-3 gap-8 mb-8">
+          <div className="grid md:grid-cols-3 gap-10 mb-10">
             <div>
               <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                  <Stethoscope className="w-4 h-4 text-blue-300" />
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center"
+                  style={{
+                    background: "linear-gradient(135deg, #0EA5E9, #6366F1)",
+                  }}
+                >
+                  <Stethoscope className="w-5 h-5 text-white" />
                 </div>
-                <span className="font-bold">{CLINIC_NAME}</span>
+                <span className="font-bold text-lg">{CLINIC_NAME}</span>
               </div>
-              <p className="text-blue-200 text-sm leading-relaxed">
-                Professional dental care in Patna. Expert treatments for your
-                perfect smile.
+              <p
+                className="text-sm leading-relaxed"
+                style={{ color: "#94a3b8" }}
+              >
+                Premium dental care in Patna. Expert treatments for your perfect
+                smile with compassion and modern technology.
               </p>
             </div>
             <div>
-              <h4 className="font-semibold mb-3 text-blue-100">Quick Links</h4>
+              <h4 className="font-semibold mb-4" style={{ color: "#bae6fd" }}>
+                Quick Links
+              </h4>
               <div className="space-y-2">
                 {[
-                  "#about",
-                  "#services",
-                  "#testimonials",
-                  "#booking",
-                  "#contact",
-                ].map((href) => (
+                  ["#about", "About"],
+                  ["#services", "Services"],
+                  ["#testimonials", "Testimonials"],
+                  ["#booking", "Book Appointment"],
+                  ["#contact", "Contact"],
+                  ["/admin/login", "Admin Login"],
+                ].map(([href, label]) => (
                   <a
                     key={href}
                     href={href}
-                    className="block text-sm text-blue-300 hover:text-white transition-colors"
+                    className="block text-sm transition-colors hover:text-white"
+                    style={{ color: "#64748b" }}
                   >
-                    {href.slice(1).charAt(0).toUpperCase() + href.slice(2)}
+                    {label}
                   </a>
                 ))}
               </div>
             </div>
             <div>
-              <h4 className="font-semibold mb-3 text-blue-100">Contact Info</h4>
-              <div className="space-y-2 text-sm text-blue-300">
+              <h4 className="font-semibold mb-4" style={{ color: "#bae6fd" }}>
+                Contact Info
+              </h4>
+              <div className="space-y-3 text-sm" style={{ color: "#64748b" }}>
                 <p className="flex items-start gap-2">
-                  <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <MapPin
+                    className="w-4 h-4 mt-0.5 flex-shrink-0"
+                    style={{ color: "#0EA5E9" }}
+                  />
                   {CLINIC_ADDRESS}
                 </p>
                 <p className="flex items-center gap-2">
-                  <Phone className="w-4 h-4" />
+                  <Phone className="w-4 h-4" style={{ color: "#22C55E" }} />
                   {CLINIC_PHONE}
                 </p>
                 <p className="flex items-center gap-2">
-                  <Mail className="w-4 h-4" />
-                  {CLINIC_EMAIL}
+                  <Clock className="w-4 h-4" style={{ color: "#6366F1" }} />
+                  Mon–Sat: 9:00 AM – 7:00 PM
                 </p>
               </div>
             </div>
           </div>
-          <div className="border-t border-white/10 pt-6 flex flex-col md:flex-row items-center justify-between gap-2 text-sm text-blue-300">
+          <div
+            className="pt-6 flex flex-col md:flex-row items-center justify-between gap-2 text-sm"
+            style={{
+              borderTop: "1px solid rgba(255,255,255,0.08)",
+              color: "#475569",
+            }}
+          >
             <p>
               &copy; {new Date().getFullYear()} {CLINIC_NAME}. All rights
               reserved.
-            </p>
-            <p>
-              Built with &hearts; using{" "}
-              <a
-                href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-blue-200 hover:text-white"
-              >
-                caffeine.ai
-              </a>
             </p>
           </div>
         </div>
       </footer>
 
-      {/* Floating WhatsApp */}
+      {/* ── FLOATING WHATSAPP ── */}
       <a
         href={`https://wa.me/${CLINIC_WA}`}
         target="_blank"
         rel="noreferrer"
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-[#25d366] rounded-full flex items-center justify-center shadow-lg whatsapp-pulse hover:scale-110 transition-transform"
+        className="fixed z-50 w-14 h-14 rounded-full flex items-center justify-center shadow-lg whatsapp-pulse hover:scale-110 transition-transform"
+        style={{ bottom: 24, right: 24, background: "#25d366" }}
         aria-label="WhatsApp us"
         data-ocid="floating.primary_button"
       >

@@ -57,7 +57,8 @@ actor {
   // New stable var with updated type
   stable let appointmentsMapV2 : Map.Map<Nat, Appointment> = Map.empty();
   let userProfiles = Map.empty<Principal, UserProfile>();
-  var nextId = 1;
+  // Stable nextId so it survives upgrades and redeploys
+  stable var nextId = 1;
 
   // Migration: copy V1 records into V2 with treatmentDone = null
   system func postupgrade() {
@@ -77,8 +78,12 @@ actor {
           treatmentDone = null;
         };
         appointmentsMapV2.add(id, migrated);
-        nextId := Nat.max(nextId, appt.id + 1);
+        if (appt.id + 1 > nextId) { nextId := appt.id + 1 };
       };
+    };
+    // Also sync nextId from V2 map in case of prior data
+    for ((id, _) in appointmentsMapV2.entries()) {
+      if (id + 1 > nextId) { nextId := id + 1 };
     };
   };
 
