@@ -21,6 +21,7 @@ export interface Appointment {
   'notes' : string,
   'timestamp' : bigint,
   'phone' : string,
+  'treatmentDone' : [] | [boolean],
 }
 export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
@@ -35,6 +36,7 @@ export interface _SERVICE {
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'markTreatmentDone' : ActorMethod<[bigint, boolean], undefined>,
   'rescheduleAppointment' : ActorMethod<[bigint, string, string], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'submitAppointment' : ActorMethod<

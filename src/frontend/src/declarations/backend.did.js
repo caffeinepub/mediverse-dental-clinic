@@ -24,6 +24,7 @@ export const Appointment = IDL.Record({
   'notes' : IDL.Text,
   'timestamp' : IDL.Int,
   'phone' : IDL.Text,
+  'treatmentDone' : IDL.Opt(IDL.Bool),
 });
 export const UserProfile = IDL.Record({ 'name' : IDL.Text });
 
@@ -40,6 +41,7 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'markTreatmentDone' : IDL.Func([IDL.Nat, IDL.Bool], [], []),
   'rescheduleAppointment' : IDL.Func([IDL.Nat, IDL.Text, IDL.Text], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'submitAppointment' : IDL.Func(
@@ -69,6 +71,7 @@ export const idlFactory = ({ IDL }) => {
     'notes' : IDL.Text,
     'timestamp' : IDL.Int,
     'phone' : IDL.Text,
+  'treatmentDone' : IDL.Opt(IDL.Bool),
   });
   const UserProfile = IDL.Record({ 'name' : IDL.Text });
   

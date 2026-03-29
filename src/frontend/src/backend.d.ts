@@ -18,6 +18,7 @@ export interface Appointment {
     notes: string;
     timestamp: bigint;
     phone: string;
+    treatmentDone: boolean | null;
 }
 export interface UserProfile {
     name: string;
@@ -35,6 +36,7 @@ export interface backendInterface {
     getCallerUserRole(): Promise<UserRole>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
+    markTreatmentDone(id: bigint, done: boolean): Promise<void>;
     rescheduleAppointment(id: bigint, newDate: string, newTime: string): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     submitAppointment(name: string, phone: string, email: string, date: string, time: string, treatment: string, notes: string): Promise<bigint>;

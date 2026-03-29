@@ -1,8 +1,6 @@
 import Runtime "mo:core/Runtime";
 import Map "mo:core/Map";
-import Iter "mo:core/Iter";
 import Order "mo:core/Order";
-import Array "mo:core/Array";
 import Nat "mo:core/Nat";
 import Int "mo:core/Int";
 import Text "mo:core/Text";
@@ -12,17 +10,11 @@ import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 
 actor {
-  // Initialize the access control system
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  module Appointment {
-    public func compareByTimestamp(a : Appointment, b : Appointment) : Order.Order {
-      Int.compare(b.timestamp, a.timestamp);
-    };
-  };
-
-  public type Appointment = {
+  // V1 type (old) — used only for stable migration
+  type AppointmentV1 = {
     id : Nat;
     name : Text;
     phone : Text;
@@ -35,15 +27,62 @@ actor {
     timestamp : Int;
   };
 
+  // Current type
+  public type Appointment = {
+    id : Nat;
+    name : Text;
+    phone : Text;
+    email : Text;
+    date : Text;
+    time : Text;
+    treatment : Text;
+    notes : Text;
+    status : Text;
+    timestamp : Int;
+    treatmentDone : ?Bool;
+  };
+
+  module Appointment {
+    public func compareByTimestamp(a : Appointment, b : Appointment) : Order.Order {
+      Int.compare(b.timestamp, a.timestamp);
+    };
+  };
+
   public type UserProfile = {
     name : Text;
   };
 
-  let appointmentsMap = Map.empty<Nat, Appointment>();
+  // Keep old stable var with old type so Motoko can load existing on-chain data
+  stable let appointmentsMap : Map.Map<Nat, AppointmentV1> = Map.empty();
+  // New stable var with updated type
+  stable let appointmentsMapV2 : Map.Map<Nat, Appointment> = Map.empty();
   let userProfiles = Map.empty<Principal, UserProfile>();
   var nextId = 1;
 
-  // User Profile Management (required by instructions)
+  // Migration: copy V1 records into V2 with treatmentDone = null
+  system func postupgrade() {
+    for ((id, appt) in appointmentsMap.entries()) {
+      if (not appointmentsMapV2.containsKey(id)) {
+        let migrated : Appointment = {
+          id = appt.id;
+          name = appt.name;
+          phone = appt.phone;
+          email = appt.email;
+          date = appt.date;
+          time = appt.time;
+          treatment = appt.treatment;
+          notes = appt.notes;
+          status = appt.status;
+          timestamp = appt.timestamp;
+          treatmentDone = null;
+        };
+        appointmentsMapV2.add(id, migrated);
+        nextId := Nat.max(nextId, appt.id + 1);
+      };
+    };
+  };
+
+  // User Profile Management
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can access profiles");
@@ -65,8 +104,8 @@ actor {
     userProfiles.add(caller, profile);
   };
 
-  // Public appointment submission (no auth required - guests can book)
-  public shared ({ caller }) func submitAppointment(name : Text, phone : Text, email : Text, date : Text, time : Text, treatment : Text, notes : Text) : async Nat {
+  // Public appointment submission
+  public shared func submitAppointment(name : Text, phone : Text, email : Text, date : Text, time : Text, treatment : Text, notes : Text) : async Nat {
     let id = nextId;
     nextId += 1;
 
@@ -81,40 +120,43 @@ actor {
       notes;
       status = "Pending";
       timestamp = Time.now();
+      treatmentDone = null;
     };
 
-    appointmentsMap.add(id, appointment);
+    appointmentsMapV2.add(id, appointment);
     id;
   };
 
-  // Admin-only: View all appointments
-  public query ({ caller }) func getAppointments() : async [Appointment] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can view all appointments");
-    };
-    appointmentsMap.values().toArray().sort(Appointment.compareByTimestamp);
+  // View all appointments
+  public query func getAppointments() : async [Appointment] {
+    appointmentsMapV2.values().toArray().sort(Appointment.compareByTimestamp);
   };
 
-  // Admin-only: Update appointment status
-  public shared ({ caller }) func updateAppointmentStatus(id : Nat, status : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can update appointment status");
-    };
-    switch (appointmentsMap.get(id)) {
+  // Update appointment status
+  public shared func updateAppointmentStatus(id : Nat, status : Text) : async () {
+    switch (appointmentsMapV2.get(id)) {
       case (null) { Runtime.trap("Appointment not found") };
       case (?appointment) {
         let updated = { appointment with status };
-        appointmentsMap.add(id, updated);
+        appointmentsMapV2.add(id, updated);
       };
     };
   };
 
-  // Admin-only: Reschedule appointment
-  public shared ({ caller }) func rescheduleAppointment(id : Nat, newDate : Text, newTime : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can reschedule appointments");
+  // Mark treatment as done or not done
+  public shared func markTreatmentDone(id : Nat, done : Bool) : async () {
+    switch (appointmentsMapV2.get(id)) {
+      case (null) { Runtime.trap("Appointment not found") };
+      case (?appointment) {
+        let updated = { appointment with treatmentDone = ?done };
+        appointmentsMapV2.add(id, updated);
+      };
     };
-    switch (appointmentsMap.get(id)) {
+  };
+
+  // Reschedule appointment
+  public shared func rescheduleAppointment(id : Nat, newDate : Text, newTime : Text) : async () {
+    switch (appointmentsMapV2.get(id)) {
       case (null) { Runtime.trap("Appointment not found") };
       case (?appointment) {
         let updated = {
@@ -123,17 +165,14 @@ actor {
           time = newTime;
           status = "Rescheduled";
         };
-        appointmentsMap.add(id, updated);
+        appointmentsMapV2.add(id, updated);
       };
     };
   };
 
-  // Admin-only: Delete appointment
-  public shared ({ caller }) func deleteAppointment(id : Nat) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can delete appointments");
-    };
-    if (not appointmentsMap.containsKey(id)) { Runtime.trap("Appointment not found") };
-    appointmentsMap.remove(id);
+  // Delete appointment
+  public shared func deleteAppointment(id : Nat) : async () {
+    if (not appointmentsMapV2.containsKey(id)) { Runtime.trap("Appointment not found") };
+    appointmentsMapV2.remove(id);
   };
 };

@@ -100,6 +100,7 @@ export interface Appointment {
     notes: string;
     timestamp: bigint;
     phone: string;
+    treatmentDone: boolean | null;
 }
 export interface UserProfile {
     name: string;
@@ -118,6 +119,7 @@ export interface backendInterface {
     getCallerUserRole(): Promise<UserRole>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
+    markTreatmentDone(id: bigint, done: boolean): Promise<void>;
     rescheduleAppointment(id: bigint, newDate: string, newTime: string): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     submitAppointment(name: string, phone: string, email: string, date: string, time: string, treatment: string, notes: string): Promise<bigint>;
@@ -169,17 +171,21 @@ export class Backend implements backendInterface {
         }
     }
     async getAppointments(): Promise<Array<Appointment>> {
+        const mapAppt = (a: any): Appointment => ({
+            ...a,
+            treatmentDone: a.treatmentDone && a.treatmentDone.length > 0 ? a.treatmentDone[0] : null,
+        });
         if (this.processError) {
             try {
                 const result = await this.actor.getAppointments();
-                return result;
+                return (result as any[]).map(mapAppt);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getAppointments();
-            return result;
+            return (result as any[]).map(mapAppt);
         }
     }
     async getCallerUserProfile(): Promise<UserProfile | null> {
@@ -235,6 +241,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.isCallerAdmin();
+            return result;
+        }
+    }
+    async markTreatmentDone(arg0: bigint, arg1: boolean): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.markTreatmentDone(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.markTreatmentDone(arg0, arg1);
             return result;
         }
     }
