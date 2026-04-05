@@ -661,15 +661,26 @@ export default function AdminDashboard() {
               <p className="text-xs text-muted-foreground">Admin Dashboard</p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleLogout}
-            data-ocid="admin.secondary_button"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Logout
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setStripeModalOpen(true)}
+              data-ocid="admin.stripe.header_button"
+            >
+              <CreditCard className="w-4 h-4 mr-2" />
+              Configure Stripe
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              data-ocid="admin.secondary_button"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 
