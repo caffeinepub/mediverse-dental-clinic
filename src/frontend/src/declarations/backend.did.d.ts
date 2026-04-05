@@ -27,18 +27,32 @@ export interface UserProfile { 'name' : string }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
+export interface ShoppingItem {
+  'currency' : string,
+  'productName' : string,
+  'productDescription' : string,
+  'priceInCents' : bigint,
+  'quantity' : bigint,
+}
+export interface StripeConfiguration {
+  'secretKey' : string,
+  'allowedCountries' : Array<string>,
+}
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'createCheckoutSession' : ActorMethod<[Array<ShoppingItem>, string, string], string>,
   'deleteAppointment' : ActorMethod<[bigint], undefined>,
   'getAppointments' : ActorMethod<[], Array<Appointment>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'isStripeConfigured' : ActorMethod<[], boolean>,
   'markTreatmentDone' : ActorMethod<[bigint, boolean], undefined>,
   'rescheduleAppointment' : ActorMethod<[bigint, string, string], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'setStripeConfiguration' : ActorMethod<[StripeConfiguration], undefined>,
   'submitAppointment' : ActorMethod<
     [string, string, string, string, string, string, string],
     bigint

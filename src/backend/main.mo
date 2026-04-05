@@ -8,6 +8,8 @@ import Time "mo:core/Time";
 import Principal "mo:core/Principal";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
+import Stripe "stripe/stripe";
+import OutCall "http-outcalls/outcall";
 
 actor {
   let accessControlState = AccessControl.initState();
@@ -52,6 +54,9 @@ actor {
     name : Text;
   };
 
+  // Stripe config
+  stable var stripeConfig : ?Stripe.StripeConfiguration = null;
+
   // Keep old stable var with old type so Motoko can load existing on-chain data
   stable let appointmentsMap : Map.Map<Nat, AppointmentV1> = Map.empty();
   // New stable var with updated type
@@ -87,7 +92,38 @@ actor {
     };
   };
 
-  // User Profile Management
+  // HTTP transform for outcalls
+  public query func transform(input : OutCall.TransformationInput) : async OutCall.TransformationOutput {
+    OutCall.transform(input);
+  };
+
+  // ── Stripe ───────────────────────────────────────────────────────────────
+
+  public shared ({ caller }) func setStripeConfiguration(config : Stripe.StripeConfiguration) : async () {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can configure Stripe");
+    };
+    stripeConfig := ?config;
+  };
+
+  public query func isStripeConfigured() : async Bool {
+    switch (stripeConfig) {
+      case (null) { false };
+      case (?_) { true };
+    };
+  };
+
+  public shared ({ caller }) func createCheckoutSession(items : [Stripe.ShoppingItem], successUrl : Text, cancelUrl : Text) : async Text {
+    switch (stripeConfig) {
+      case (null) { Runtime.trap("Stripe is not configured") };
+      case (?config) {
+        await Stripe.createCheckoutSession(config, caller, items, successUrl, cancelUrl, transform);
+      };
+    };
+  };
+
+  // ── User Profile Management ──────────────────────────────────────────────
+
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can access profiles");
@@ -109,7 +145,8 @@ actor {
     userProfiles.add(caller, profile);
   };
 
-  // Public appointment submission
+  // ── Appointment Management ───────────────────────────────────────────────
+
   public shared func submitAppointment(name : Text, phone : Text, email : Text, date : Text, time : Text, treatment : Text, notes : Text) : async Nat {
     let id = nextId;
     nextId += 1;
@@ -132,12 +169,10 @@ actor {
     id;
   };
 
-  // View all appointments
   public query func getAppointments() : async [Appointment] {
     appointmentsMapV2.values().toArray().sort(Appointment.compareByTimestamp);
   };
 
-  // Update appointment status
   public shared func updateAppointmentStatus(id : Nat, status : Text) : async () {
     switch (appointmentsMapV2.get(id)) {
       case (null) { Runtime.trap("Appointment not found") };
@@ -148,7 +183,6 @@ actor {
     };
   };
 
-  // Mark treatment as done or not done
   public shared func markTreatmentDone(id : Nat, done : Bool) : async () {
     switch (appointmentsMapV2.get(id)) {
       case (null) { Runtime.trap("Appointment not found") };
@@ -159,7 +193,6 @@ actor {
     };
   };
 
-  // Reschedule appointment
   public shared func rescheduleAppointment(id : Nat, newDate : Text, newTime : Text) : async () {
     switch (appointmentsMapV2.get(id)) {
       case (null) { Runtime.trap("Appointment not found") };
@@ -175,7 +208,6 @@ actor {
     };
   };
 
-  // Delete appointment
   public shared func deleteAppointment(id : Nat) : async () {
     if (not appointmentsMapV2.containsKey(id)) { Runtime.trap("Appointment not found") };
     appointmentsMapV2.remove(id);

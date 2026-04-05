@@ -319,6 +319,7 @@ export default function Home() {
     { href: "#testimonials", label: "Testimonials", id: "testimonials" },
     { href: "#booking", label: "Book Appointment", id: "booking" },
     { href: "#contact", label: "Contact", id: "contact" },
+    { href: "/plans", label: "Plans", id: "" },
   ];
 
   return (

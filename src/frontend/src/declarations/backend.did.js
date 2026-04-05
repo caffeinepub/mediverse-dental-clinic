@@ -27,10 +27,22 @@ export const Appointment = IDL.Record({
   'treatmentDone' : IDL.Opt(IDL.Bool),
 });
 export const UserProfile = IDL.Record({ 'name' : IDL.Text });
+export const ShoppingItem = IDL.Record({
+  'currency' : IDL.Text,
+  'productName' : IDL.Text,
+  'productDescription' : IDL.Text,
+  'priceInCents' : IDL.Nat,
+  'quantity' : IDL.Nat,
+});
+export const StripeConfiguration = IDL.Record({
+  'secretKey' : IDL.Text,
+  'allowedCountries' : IDL.Vec(IDL.Text),
+});
 
 export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+  'createCheckoutSession' : IDL.Func([IDL.Vec(ShoppingItem), IDL.Text, IDL.Text], [IDL.Text], []),
   'deleteAppointment' : IDL.Func([IDL.Nat], [], []),
   'getAppointments' : IDL.Func([], [IDL.Vec(Appointment)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
@@ -41,9 +53,11 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
   'markTreatmentDone' : IDL.Func([IDL.Nat, IDL.Bool], [], []),
   'rescheduleAppointment' : IDL.Func([IDL.Nat, IDL.Text, IDL.Text], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),
   'submitAppointment' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
       [IDL.Nat],
@@ -71,13 +85,25 @@ export const idlFactory = ({ IDL }) => {
     'notes' : IDL.Text,
     'timestamp' : IDL.Int,
     'phone' : IDL.Text,
-  'treatmentDone' : IDL.Opt(IDL.Bool),
+    'treatmentDone' : IDL.Opt(IDL.Bool),
   });
   const UserProfile = IDL.Record({ 'name' : IDL.Text });
+  const ShoppingItem = IDL.Record({
+    'currency' : IDL.Text,
+    'productName' : IDL.Text,
+    'productDescription' : IDL.Text,
+    'priceInCents' : IDL.Nat,
+    'quantity' : IDL.Nat,
+  });
+  const StripeConfiguration = IDL.Record({
+    'secretKey' : IDL.Text,
+    'allowedCountries' : IDL.Vec(IDL.Text),
+  });
   
   return IDL.Service({
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+    'createCheckoutSession' : IDL.Func([IDL.Vec(ShoppingItem), IDL.Text, IDL.Text], [IDL.Text], []),
     'deleteAppointment' : IDL.Func([IDL.Nat], [], []),
     'getAppointments' : IDL.Func([], [IDL.Vec(Appointment)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
@@ -88,8 +114,11 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
+    'markTreatmentDone' : IDL.Func([IDL.Nat, IDL.Bool], [], []),
     'rescheduleAppointment' : IDL.Func([IDL.Nat, IDL.Text, IDL.Text], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),
     'submitAppointment' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
         [IDL.Nat],

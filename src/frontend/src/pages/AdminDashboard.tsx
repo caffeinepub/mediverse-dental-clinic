@@ -19,14 +19,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle,
+  AlertTriangle,
   Ban,
   Calendar,
   CheckCircle2,
   ChevronRight,
   Clock,
+  CreditCard,
+  Eye,
+  EyeOff,
   LogOut,
   MoreVertical,
   RefreshCw,
+  Settings,
+  ShieldCheck,
   Stethoscope,
   Timer,
   Trash2,
@@ -34,10 +40,11 @@ import {
   Users,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
-import type { Appointment } from "../backend.d";
-import { useActor } from "../hooks/useActor";
+import type { Appointment, backendInterface } from "../backend.d";
+import { createActorWithConfig } from "../config";
+import { getSecretParameter } from "../utils/urlParams";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -164,7 +171,7 @@ function getTimeGroup(appt: Appointment): TimeGroup {
   const displayStatus = getDisplayStatus(appt);
 
   if (appt.date > today) return "Future";
-  if (appt.date < today) return "Past Today"; // past dates shown in past
+  if (appt.date < today) return "Past Today";
 
   // Same day
   if (displayStatus === "In Progress" && diffMin >= -30) return "Ongoing";
@@ -233,12 +240,40 @@ const GROUP_STYLES: Record<
   },
 };
 
+// ─── Actor hook for admin dashboard ─────────────────────────────────────────
+// Creates actor directly without relying on identity/useActor chain
+function useAdminActor() {
+  const actorRef = useRef<backendInterface | null>(null);
+
+  const actorQuery = useQuery<backendInterface>({
+    queryKey: ["admin-actor"],
+    queryFn: async () => {
+      if (actorRef.current) return actorRef.current;
+      const actor = await createActorWithConfig();
+      // Try to initialize with admin token but don't fail if it errors
+      try {
+        const adminToken = getSecretParameter("caffeineAdminToken") || "";
+        await actor._initializeAccessControlWithSecret(adminToken);
+      } catch {
+        // Silently ignore - actor still works for public calls
+      }
+      actorRef.current = actor;
+      return actor;
+    },
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: 5,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
+  });
+
+  return actorQuery.data ?? null;
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { actor, isFetching } = useActor();
+  const actor = useAdminActor();
   const [filter, setFilter] = useState("All");
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [rescheduleAppt, setRescheduleAppt] = useState<Appointment | null>(
@@ -247,19 +282,60 @@ export default function AdminDashboard() {
   const [newDate, setNewDate] = useState("");
   const [newTime, setNewTime] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<bigint | null>(null);
+  const [stripeModalOpen, setStripeModalOpen] = useState(false);
+  const [stripeKey, setStripeKey] = useState("");
+  const [stripeCountries, setStripeCountries] = useState("IN");
+  const [showStripeKey, setShowStripeKey] = useState(false);
+
+  const { data: stripeConfigured, refetch: refetchStripe } = useQuery<boolean>({
+    queryKey: ["stripe-configured-admin"],
+    queryFn: async () => {
+      if (!actor) return false;
+      return (actor as any).isStripeConfigured();
+    },
+    enabled: !!actor,
+    staleTime: 30000,
+  });
+
+  const saveStripeConfig = useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Actor not available");
+      const countries = stripeCountries
+        .split(",")
+        .map((c) => c.trim())
+        .filter(Boolean);
+      await (actor as any).setStripeConfiguration({
+        secretKey: stripeKey,
+        allowedCountries: countries,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Stripe payment gateway configured successfully!");
+      setStripeModalOpen(false);
+      setStripeKey("");
+      refetchStripe();
+    },
+    onError: () => {
+      toast.error("Failed to save Stripe configuration. Please try again.");
+    },
+  });
 
   const {
     data: appointments = [],
     isLoading,
     isError,
+    refetch,
   } = useQuery<Appointment[]>({
     queryKey: ["appointments"],
     queryFn: async () => {
-      if (!actor) return [];
-      return actor.getAppointments();
+      if (!actor) throw new Error("Actor not ready");
+      const result = await actor.getAppointments();
+      return result;
     },
-    enabled: !!actor && !isFetching,
+    enabled: !!actor,
     refetchInterval: 30000,
+    retry: 3,
+    retryDelay: 2000,
   });
 
   const updateStatus = useMutation({
@@ -374,7 +450,7 @@ export default function AdminDashboard() {
     const patientName = appt.name || "Patient";
     window.open(
       waLink(
-        "+91 9142345153",
+        appt.phone,
         `Hello ${patientName}, thank you for visiting Mediverse Dental Clinic. Your treatment has been successfully completed. We hope you are feeling better. For any follow-up, feel free to contact us.`,
       ),
       "_blank",
@@ -441,7 +517,6 @@ export default function AdminDashboard() {
     groupMap[getTimeGroup(appt)].push(appt);
   }
 
-  // Sort each group by time ascending
   for (const key of GROUP_ORDER) {
     groupMap[key].sort(
       (a, b) => apptDateTime(a).getTime() - apptDateTime(b).getTime(),
@@ -477,7 +552,6 @@ export default function AdminDashboard() {
           </div>
           <div className="flex items-center gap-2">
             <StatusBadge status={displayStatus} />
-            {/* Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -660,6 +734,66 @@ export default function AdminDashboard() {
           ))}
         </div>
 
+        {/* Stripe Configuration Banner */}
+        {stripeConfigured === false && (
+          <div
+            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4"
+            data-ocid="admin.stripe.panel"
+          >
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800">
+                  Stripe payment gateway is not configured
+                </p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  Set it up to accept online payments from the Plans page.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStripeModalOpen(true)}
+              className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white transition-all duration-200 hover:opacity-90"
+              style={{ backgroundColor: "#0A1F44" }}
+              data-ocid="admin.stripe.open_modal_button"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              Configure Stripe
+            </button>
+          </div>
+        )}
+
+        {stripeConfigured === true && (
+          <div
+            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-green-50 border border-green-200 rounded-2xl px-5 py-4"
+            data-ocid="admin.stripe.panel"
+          >
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="w-5 h-5 text-green-600 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-green-800 flex items-center gap-1.5">
+                  <CreditCard className="w-4 h-4" />
+                  Stripe Connected
+                </p>
+                <p className="text-xs text-green-600 mt-0.5">
+                  Payment gateway is active. Customers can pay online.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStripeModalOpen(true)}
+              className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border transition-all duration-200 hover:bg-green-100"
+              style={{ borderColor: "#16a34a", color: "#16a34a" }}
+              data-ocid="admin.stripe.open_modal_button"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              Reconfigure
+            </button>
+          </div>
+        )}
+
         {/* Filter Tabs */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3">
           <Tabs value={filter} onValueChange={setFilter}>
@@ -681,7 +815,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Loading / Error */}
-        {isLoading && (
+        {(isLoading || !actor) && (
           <div
             className="flex items-center justify-center py-20"
             data-ocid="admin.loading_state"
@@ -691,19 +825,28 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {isError && (
+        {isError && actor && (
           <div
-            className="flex items-center justify-center py-20"
+            className="flex flex-col items-center justify-center py-20 gap-4"
             data-ocid="admin.error_state"
           >
-            <AlertCircle className="w-6 h-6 text-red-500" />
-            <span className="ml-3 text-red-600">
-              Failed to load appointments
-            </span>
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-6 h-6 text-red-500" />
+              <span className="text-red-600">Failed to load appointments</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              className="gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Try Again
+            </Button>
           </div>
         )}
 
-        {!isLoading && !isError && (
+        {!isLoading && !isError && actor && (
           <>
             {/* Next Appointment Banner */}
             {nextAppt ? (
@@ -745,7 +888,6 @@ export default function AdminDashboard() {
                     Start Now
                   </Button>
                 </div>
-                {/* Decorative */}
                 <div className="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-white/5" />
                 <div className="absolute -bottom-8 right-16 w-24 h-24 rounded-full bg-white/5" />
               </div>
@@ -785,7 +927,6 @@ export default function AdminDashboard() {
               const style = GROUP_STYLES[groupKey];
               return (
                 <section key={groupKey}>
-                  {/* Group header */}
                   <div className="flex items-center gap-2 mb-3 px-1">
                     <div className={`flex items-center gap-2 ${style.color}`}>
                       {style.icon}
@@ -801,7 +942,6 @@ export default function AdminDashboard() {
                     <div className={`flex-1 h-px ${style.border} border-t`} />
                   </div>
 
-                  {/* Cards grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {appts.map((appt, idx) => (
                       <AppointmentCard
@@ -905,6 +1045,108 @@ export default function AdminDashboard() {
                 <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
               ) : null}
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stripe Configuration Modal */}
+      <Dialog open={stripeModalOpen} onOpenChange={setStripeModalOpen}>
+        <DialogContent data-ocid="admin.stripe.dialog" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-slate-600" />
+              Configure Stripe Payment Gateway
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            <p className="text-sm text-muted-foreground">
+              Enter your Stripe Secret Key to enable online payments on the
+              Plans page. You can find this in your{" "}
+              <a
+                href="https://dashboard.stripe.com/apikeys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline text-blue-600 hover:text-blue-800"
+              >
+                Stripe Dashboard
+              </a>
+              .
+            </p>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="stripe-key">Stripe Secret Key</Label>
+              <div className="relative">
+                <Input
+                  id="stripe-key"
+                  type={showStripeKey ? "text" : "password"}
+                  placeholder="sk_live_... or sk_test_..."
+                  value={stripeKey}
+                  onChange={(e) => setStripeKey(e.target.value)}
+                  className="pr-10"
+                  data-ocid="admin.stripe.input"
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  onClick={() => setShowStripeKey((v) => !v)}
+                  data-ocid="admin.stripe.toggle"
+                  aria-label={showStripeKey ? "Hide key" : "Show key"}
+                >
+                  {showStripeKey ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="stripe-countries">
+                Allowed Countries{" "}
+                <span className="text-muted-foreground font-normal">
+                  (comma-separated)
+                </span>
+              </Label>
+              <Input
+                id="stripe-countries"
+                type="text"
+                placeholder="IN, US, GB"
+                value={stripeCountries}
+                onChange={(e) => setStripeCountries(e.target.value)}
+                data-ocid="admin.stripe.input"
+              />
+              <p className="text-xs text-muted-foreground">
+                Use ISO 2-letter country codes, e.g. IN, US, GB, CA
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setStripeModalOpen(false);
+                setStripeKey("");
+              }}
+              data-ocid="admin.stripe.cancel_button"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => saveStripeConfig.mutate()}
+              disabled={saveStripeConfig.isPending || !stripeKey.trim()}
+              className="bg-clinic-blue hover:bg-clinic-blue-dark text-white"
+              data-ocid="admin.stripe.save_button"
+            >
+              {saveStripeConfig.isPending ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <ShieldCheck className="w-4 h-4 mr-2" />
+              )}
+              {saveStripeConfig.isPending ? "Saving..." : "Save Configuration"}
             </Button>
           </DialogFooter>
         </DialogContent>
